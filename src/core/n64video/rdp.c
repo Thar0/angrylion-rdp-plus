@@ -193,26 +193,26 @@ struct rdp_state {
     struct span span[1024];
 
     // span states
-    int spans_ds;
-    int spans_dt;
-    int spans_dw;
-    int spans_dr;
-    int spans_dg;
-    int spans_db;
-    int spans_da;
-    int spans_dz;
-    int spans_dzpix;
+    int spans_dsdx;
+    int spans_dtdx;
+    int spans_dwdx;
+    int spans_drdx;
+    int spans_dgdx;
+    int spans_dbdx;
+    int spans_dadx;
+    int spans_dzdx;
+    uint16_t spans_dzpix;
 
     int spans_drdy;
     int spans_dgdy;
     int spans_dbdy;
     int spans_dady;
     int spans_dzdy;
-    int spans_cdr;
-    int spans_cdg;
-    int spans_cdb;
-    int spans_cda;
-    int spans_cdz;
+    int spans_cdrdx;
+    int spans_cdgdx;
+    int spans_cdbdx;
+    int spans_cdadx;
+    int spans_cdzdx;
 
     int spans_dsdy;
     int spans_dtdy;

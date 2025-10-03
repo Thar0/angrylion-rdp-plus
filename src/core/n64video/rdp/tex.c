@@ -429,8 +429,8 @@ loading_pipeline(struct rdp_state *wstate, int ystart, int yend, int tilenum, in
     tiadvance >>= (quadricate << 1);
     spanadvance >>= (quadricate << 1);
 
-    int dsinc = wstate->spans_ds;
-    int dtinc = wstate->spans_dt;
+    int dsinc = wstate->spans_dsdx;
+    int dtinc = wstate->spans_dtdx;
 
     // Note ycur is integer part of y
     for (int ycur = ystart; ycur <= yend; ycur++) {
@@ -631,9 +631,9 @@ edgewalker_for_loads(struct rdp_state *wstate, int32_t *lewdata)
     int dtdx = ((lewdata[7] << 16) & 0xffff0000) | (lewdata[6] & 0xffff);
     int dtde = (lewdata[9] & 0xffff) << 16;
 
-    wstate->spans_ds = dsdx & ~0x1f;
-    wstate->spans_dt = dtdx & ~0x1f;
-    wstate->spans_dw = 0;
+    wstate->spans_dsdx = dsdx & ~0x1f;
+    wstate->spans_dtdx = dtdx & ~0x1f;
+    wstate->spans_dwdx = 0;
 
     if (xh > xm) // uls > lrs
         return;  // always loads nothing (this includes loadblock max 2048 texels since >2048 texels is a negative

@@ -1,22 +1,22 @@
 #ifdef N64VIDEO_C
 
-static STRICTINLINE int32_t
-normalize_dzpix(int32_t sum)
+static STRICTINLINE uint16_t
+normalize_dzpix(uint16_t sum)
 {
-    int count;
     if (sum & 0xc000)
         return 0x8000;
+
     if (!(sum & 0xffff))
         return 1;
 
     if (sum == 1)
         return 3;
 
-    for (count = 0x2000; count > 0; count >>= 1) {
+    // Integer log2, finding the highest-position set bit
+    for (int count = 0x2000; count > 0; count >>= 1) {
         if (sum & count)
-            return (count << 1);
+            return count << 1;
     }
-
     return 0;
 }
 
@@ -25,29 +25,45 @@ replicate_for_copy(struct rdp_state *wstate, uint32_t *outbyte, uint32_t inshort
                    uint32_t tilenum, uint32_t tformat, uint32_t tsize)
 {
     uint32_t lownib, hinib;
+
     switch (tsize) {
         case PIXEL_SIZE_4BIT:
             lownib = (nybbleoffset ^ 3) << 2;
             lownib = hinib = (inshort >> lownib) & 0xf;
-            if (tformat == FORMAT_CI) {
-                *outbyte = (wstate->tile[tilenum].palette << 4) | lownib;
-            } else if (tformat == FORMAT_IA) {
-                lownib = (lownib << 4) | lownib;
-                *outbyte = (lownib & 0xe0) | ((lownib & 0xe0) >> 3) | ((lownib & 0xc0) >> 6);
-            } else
-                *outbyte = (lownib << 4) | lownib;
-            break;
-        case PIXEL_SIZE_8BIT:
-            hinib = ((nybbleoffset ^ 3) | 1) << 2;
-            if (tformat == FORMAT_IA) {
-                lownib = (inshort >> hinib) & 0xf;
-                *outbyte = (lownib << 4) | lownib;
-            } else {
-                lownib = (inshort >> (hinib & ~4)) & 0xf;
-                hinib = (inshort >> hinib) & 0xf;
-                *outbyte = (hinib << 4) | lownib;
+
+            switch (tformat) {
+                case FORMAT_CI:
+                    *outbyte = (wstate->tile[tilenum].palette << 4) | lownib;
+                    break;
+
+                case FORMAT_IA:
+                    lownib = (lownib << 4) | lownib;
+                    *outbyte = (lownib & 0xe0) | ((lownib & 0xe0) >> 3) | ((lownib & 0xc0) >> 6);
+                    break;
+
+                default:
+                    *outbyte = (lownib << 4) | lownib;
+                    break;
             }
             break;
+
+        case PIXEL_SIZE_8BIT:
+            hinib = ((nybbleoffset ^ 3) | 1) << 2;
+
+            switch (tformat) {
+                case FORMAT_IA:
+                    lownib = (inshort >> hinib) & 0xf;
+                    *outbyte = (lownib << 4) | lownib;
+                    break;
+
+                default:
+                    lownib = (inshort >> (hinib & ~4)) & 0xf;
+                    hinib = (inshort >> hinib) & 0xf;
+                    *outbyte = (hinib << 4) | lownib;
+                    break;
+            }
+            break;
+
         default:
             *outbyte = (inshort >> 8) & 0xff;
             break;
@@ -58,32 +74,33 @@ static void
 fetch_qword_copy(struct rdp_state *wstate, uint32_t *hidword, uint32_t *lowdword, int32_t ssss, int32_t ssst,
                  uint32_t tilenum)
 {
-    uint32_t shorta, shortb, shortc, shortd;
+    uint32_t tformat, tsize;
+    if (wstate->other_modes.en_tlut) {
+        tformat = wstate->other_modes.tlut_type ? FORMAT_IA : FORMAT_RGBA;
+        tsize = PIXEL_SIZE_16BIT;
+    } else {
+        tformat = wstate->tile[tilenum].format;
+        tsize = wstate->tile[tilenum].size;
+    }
+
+    int32_t sss = ssss, sst = ssst;
+
+    // Shift / convert relative / mask / mirror
+    int32_t sss1, sss2, sss3;
+    tc_pipeline_copy(&wstate->tile[tilenum], &sss, &sss1, &sss2, &sss3, &sst);
+
     uint32_t sortshort[8];
     int hibits[6];
     int lowbits[6];
-    int32_t sss = ssss, sst = ssst, sss1 = 0, sss2 = 0, sss3 = 0;
-    int largetex = 0;
-
-    uint32_t tformat, tsize;
-    if (wstate->other_modes.en_tlut) {
-        tsize = PIXEL_SIZE_16BIT;
-        tformat = wstate->other_modes.tlut_type ? FORMAT_IA : FORMAT_RGBA;
-    } else {
-        tsize = wstate->tile[tilenum].size;
-        tformat = wstate->tile[tilenum].format;
-    }
-
-    tc_pipeline_copy(&wstate->tile[tilenum], &sss, &sss1, &sss2, &sss3, &sst);
     read_tmem_copy(wstate, sss, sss1, sss2, sss3, sst, tilenum, sortshort, hibits, lowbits);
-    largetex = (tformat == FORMAT_YUV || (tformat == FORMAT_RGBA && tsize == PIXEL_SIZE_32BIT));
 
+    uint32_t shorta, shortb, shortc, shortd;
     if (wstate->other_modes.en_tlut) {
         shorta = sortshort[4];
         shortb = sortshort[5];
         shortc = sortshort[6];
         shortd = sortshort[7];
-    } else if (largetex) {
+    } else if (tformat == FORMAT_YUV || (tformat == FORMAT_RGBA && tsize == PIXEL_SIZE_32BIT)) {
         shorta = sortshort[0];
         shortb = sortshort[1];
         shortc = sortshort[2];
@@ -97,9 +114,9 @@ fetch_qword_copy(struct rdp_state *wstate, uint32_t *hidword, uint32_t *lowdword
 
     *lowdword = (shortc << 16) | shortd;
 
-    if (tsize == PIXEL_SIZE_16BIT)
+    if (tsize == PIXEL_SIZE_16BIT) {
         *hidword = (shorta << 16) | shortb;
-    else {
+    } else {
         replicate_for_copy(wstate, &shorta, shorta, lowbits[0] & 3, tilenum, tformat, tsize);
         replicate_for_copy(wstate, &shortb, shortb, lowbits[1] & 3, tilenum, tformat, tsize);
         replicate_for_copy(wstate, &shortc, shortc, lowbits[3] & 3, tilenum, tformat, tsize);
@@ -108,28 +125,38 @@ fetch_qword_copy(struct rdp_state *wstate, uint32_t *hidword, uint32_t *lowdword
     }
 }
 
+/**
+ * offx: 0.2
+ * offy: 0.2
+ * r: 9.2
+ * g: 9.2
+ * b: 9.2
+ * a: 9.2
+ */
 static STRICTINLINE void
 rgba_correct(struct rdp_state *wstate, int offx, int offy, int r, int g, int b, int a, uint32_t cvg)
 {
-    int summand_r, summand_b, summand_g, summand_a;
-
     if (cvg == 8) {
         r >>= 2;
         g >>= 2;
         b >>= 2;
         a >>= 2;
     } else {
-        summand_r = offx * wstate->spans_cdr + offy * wstate->spans_drdy;
-        summand_g = offx * wstate->spans_cdg + offy * wstate->spans_dgdy;
-        summand_b = offx * wstate->spans_cdb + offy * wstate->spans_dbdy;
-        summand_a = offx * wstate->spans_cda + offy * wstate->spans_dady;
+        // 0.2 * s10.2 = s10.4
+        int summand_r, summand_b, summand_g, summand_a;
+        summand_r = offx * wstate->spans_cdrdx + offy * wstate->spans_drdy;
+        summand_g = offx * wstate->spans_cdgdx + offy * wstate->spans_dgdy;
+        summand_b = offx * wstate->spans_cdbdx + offy * wstate->spans_dbdy;
+        summand_a = offx * wstate->spans_cdadx + offy * wstate->spans_dady;
 
+        // colors coming in are 9.2 formatted, shift left by 2 to sum with 10.4 format then extract int part
         r = ((r << 2) + summand_r) >> 4;
         g = ((g << 2) + summand_g) >> 4;
         b = ((b << 2) + summand_b) >> 4;
         a = ((a << 2) + summand_a) >> 4;
     }
-
+    // result colors are 1.8 formatted
+    // clamp to 0.8, possibly wrap to 0
     wstate->shade_color.r = special_9bit_clamptable[r & 0x1ff];
     wstate->shade_color.g = special_9bit_clamptable[g & 0x1ff];
     wstate->shade_color.b = special_9bit_clamptable[b & 0x1ff];
@@ -137,33 +164,32 @@ rgba_correct(struct rdp_state *wstate, int offx, int offy, int r, int g, int b, 
 }
 
 static STRICTINLINE void
-z_correct(struct rdp_state *wstate, int offx, int offy, int *z, uint32_t cvg)
+z_correct(struct rdp_state *wstate, int offx /* u0.2 */, int offy /* u0.2 */, int *z /* s15.6 */,
+          uint32_t cvg /* [0, 8] */)
 {
-    int summand_z;
-    int sz = *z;
-    int zanded;
+    int sz = *z; // input z is s15.6 (truncated from s15.16)
 
-    if (cvg == 8)
+    if (cvg == 8) {
         sz = sz >> 3;
-    else {
-        summand_z = offx * wstate->spans_cdz + offy * wstate->spans_dzdy;
-
+    } else {
+        int summand_z = offx * wstate->spans_cdzdx + offy * wstate->spans_dzdy;
+        // s15.6 << 2 = s15.8
+        // s15.8 >> 5 = s15.3
         sz = ((sz << 2) + summand_z) >> 5;
     }
 
-    zanded = (sz & 0x60000) >> 17;
+    // Clamp s15.3 to u15.3 with a combiner-style clamp
+    switch ((sz & 0x60000) >> 17) {
+        case_no_default;
 
-    switch (zanded) {
         case 0:
-            *z = sz & 0x3ffff;
-            break;
         case 1:
             *z = sz & 0x3ffff;
             break;
-        case 2:
+        case 2: // Clamp to max
             *z = 0x3ffff;
             break;
-        case 3:
+        case 3: // Clamp to 0
             *z = 0;
             break;
     }
@@ -312,198 +338,224 @@ rejected_hbwrite_2cycle(struct rdp_state *wstate, int cdith, uint32_t blend_en, 
 static void
 render_spans_1cycle_complete(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
-    int zb = wstate->zb_address >> 1;
-    int zbcur;
-    uint8_t offx = 0;
-    uint8_t offy = 0;
-    struct spansigs sigs;
-    uint32_t blend_en;
-    uint32_t prewrap;
-    uint32_t curpixel_cvg, curpixel_cvbit, curpixel_memcvg;
-
-    int prim_tile = tilenum;
-    int tile1 = tilenum;
-    int newtile = tilenum;
-    int news, newt;
-
-    int i, j;
-
     int drinc, dginc, dbinc, dainc, dzinc, dsinc, dtinc, dwinc;
     int xinc;
 
     if (flip) {
-        drinc = wstate->spans_dr;
-        dginc = wstate->spans_dg;
-        dbinc = wstate->spans_db;
-        dainc = wstate->spans_da;
-        dzinc = wstate->spans_dz;
-        dsinc = wstate->spans_ds;
-        dtinc = wstate->spans_dt;
-        dwinc = wstate->spans_dw;
+        drinc = wstate->spans_drdx;
+        dginc = wstate->spans_dgdx;
+        dbinc = wstate->spans_dbdx;
+        dainc = wstate->spans_dadx;
+        dzinc = wstate->spans_dzdx;
+        dsinc = wstate->spans_dsdx;
+        dtinc = wstate->spans_dtdx;
+        dwinc = wstate->spans_dwdx;
         xinc = 1;
     } else {
-        drinc = -wstate->spans_dr;
-        dginc = -wstate->spans_dg;
-        dbinc = -wstate->spans_db;
-        dainc = -wstate->spans_da;
-        dzinc = -wstate->spans_dz;
-        dsinc = -wstate->spans_ds;
-        dtinc = -wstate->spans_dt;
-        dwinc = -wstate->spans_dw;
+        drinc = -wstate->spans_drdx;
+        dginc = -wstate->spans_dgdx;
+        dbinc = -wstate->spans_dbdx;
+        dainc = -wstate->spans_dadx;
+        dzinc = -wstate->spans_dzdx;
+        dsinc = -wstate->spans_dsdx;
+        dtinc = -wstate->spans_dtdx;
+        dwinc = -wstate->spans_dwdx;
         xinc = -1;
     }
 
-    int dzpix;
-    if (!wstate->other_modes.z_source_sel)
+    // Select source of dz
+
+    uint16_t dzpix;
+    if (wstate->other_modes.z_source_sel == Z_SRC_PIXEL)
         dzpix = wstate->spans_dzpix;
     else {
         dzpix = wstate->primitive_delta_z;
-        dzinc = wstate->spans_cdz = wstate->spans_dzdy = 0;
+        dzinc = wstate->spans_cdzdx = wstate->spans_dzdy = 0;
     }
     int dzpixenc = dz_compress(dzpix);
 
+    int prim_tile = tilenum;
+    int tile1 = tilenum;
+    int newtile = tilenum;
+
+    struct spansigs sigs;
+
     int cdith = 7, adith = 0;
-    int r, g, b, a, z, s, t, w;
-    int sr, sg, sb, sa, sz, ss, st, sw;
-    int xstart, xend, xendsc;
-    int sss = 0, sst = 0;
-    int32_t prelodfrac = 0;
-    int curpixel = 0;
-    int x, length, scdiff, lodlength;
-    uint32_t fir = 0, fig = 0, fib = 0;
     int delayedhbwidx = -1;
-    int wen;
+    int zb = wstate->zb_address >> 1;
 
-    for (i = start; i <= end; i++) {
-        if (wstate->span[i].validline) {
+    int32_t prelodfrac = 0; // Note this is not used until it is first set
 
-            xstart = wstate->span[i].lx;
-            xend = wstate->span[i].unscrx;
-            xendsc = wstate->span[i].rx;
-            r = wstate->span[i].r;
-            g = wstate->span[i].g;
-            b = wstate->span[i].b;
-            a = wstate->span[i].a;
-            z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
-            s = wstate->span[i].s;
-            t = wstate->span[i].t;
-            w = wstate->span[i].w;
+    for (int ycur = start; ycur <= end; ycur++) {
+        if (!wstate->span[ycur].validline)
+            continue;
 
-            x = xendsc;
-            curpixel = wstate->fb_width * i + x;
-            zbcur = zb + curpixel;
+        int xstart = wstate->span[ycur].lx;
+        int xend = wstate->span[ycur].unscrx;
+        int xendsc = wstate->span[ycur].rx;
+        int r = wstate->span[ycur].r;
+        int g = wstate->span[ycur].g;
+        int b = wstate->span[ycur].b;
+        int a = wstate->span[ycur].a;
+        // z is s15.16, prim z has fractional part all 0
+        int z = (wstate->other_modes.z_source_sel == Z_SRC_PIXEL) ? wstate->span[ycur].z : wstate->primitive_z;
+        int s = wstate->span[ycur].s;
+        int t = wstate->span[ycur].t;
+        int w = wstate->span[ycur].w;
 
-            if (!flip) {
-                length = xendsc - xstart;
-                scdiff = xend - xendsc;
-                compute_cvg_noflip(wstate, i);
+        /* xstart, xend, xendsc, r, g, b, a, z, s, t, w */
+
+        int x = xendsc;
+        int curpixel = wstate->fb_width * ycur + x;
+        int zbcur = zb + curpixel;
+
+        int length, scdiff;
+        if (!flip) {
+            length = xendsc - xstart;
+            scdiff = xend - xendsc;
+            compute_cvg_noflip(wstate, ycur);
+        } else {
+            length = xstart - xendsc;
+            scdiff = xendsc - xend;
+            compute_cvg_flip(wstate, ycur);
+        }
+
+        /* xstart, xend, xendsc, r, g, b, a, z, s, t, w, cvg */
+
+        if (scdiff) {
+            scdiff &= 0xfff;
+            r += drinc * scdiff;
+            g += dginc * scdiff;
+            b += dbinc * scdiff;
+            a += dainc * scdiff;
+            z += dzinc * scdiff;
+            s += dsinc * scdiff;
+            t += dtinc * scdiff;
+            w += dwinc * scdiff;
+        }
+
+        // !flip => xend - xstart
+        //  flip => xstart - xend
+        int lodlength = length + scdiff;
+
+        // "long spans" are those larger than 8 pixels
+        sigs.longspan = lodlength > 7;
+        sigs.midspan = lodlength == 7;
+        sigs.onelessthanmid = lodlength == 6;
+
+        for (int j = 0; j <= length; j++) {
+            int sr = r >> 14; // 9.2 format
+            int sg = g >> 14;
+            int sb = b >> 14;
+            int sa = a >> 14;
+            int ss = s >> 16;
+            int st = t >> 16;
+            int sw = w >> 16;
+            int sz = (z >> 10) & 0x3fffff; // 22 bits = 21 bits + 1 sign bit = s15.6
+
+            sigs.endspan = j == length;
+            sigs.preendspan = j == (length - 1);
+
+            // coverage derived quantities
+            uint8_t offx, offy; // both 0.2 formatted
+            uint32_t curpixel_cvg, curpixel_cvbit;
+            lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+
+            // texture perspective correction for TEXEL1
+            int news, newt;
+            get_texel1_1cycle(wstate, &news, &newt, s, t, w, dsinc, dtinc, dwinc, ycur, &sigs);
+
+            if (j != 0) {
+                // shuffle TEXEL1 into TEXEL0
+                wstate->texel0_color = wstate->texel1_color;
+                // lod frac was calculated for next pixel already, shuffle it in
+                wstate->lod_frac = prelodfrac;
             } else {
-                length = xstart - xendsc;
-                scdiff = xendsc - xend;
-                compute_cvg_flip(wstate, i);
+                // texture pipeline first cycling, HW picks up from last primitive
+                int sss, sst;
+                // texture perspective correction for TEXEL0
+                wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
+                // LOD for TEXEL0, updates wstate->lod_frac
+                tclod_1cycle_current(wstate, &sss, &sst, news, newt, s, t, w, dsinc, dtinc, dwinc, ycur, prim_tile,
+                                     &tile1, &sigs);
+                // texture sampling + filtering for TEXEL0
+                texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
             }
 
-            if (scdiff) {
+            sigs.nextspan = sigs.endspan;
+            sigs.endspan = sigs.preendspan;
+            sigs.preendspan = j == (length - 2);
 
-                scdiff &= 0xfff;
-                r += (drinc * scdiff);
-                g += (dginc * scdiff);
-                b += (dbinc * scdiff);
-                a += (dainc * scdiff);
-                z += (dzinc * scdiff);
-                s += (dsinc * scdiff);
-                t += (dtinc * scdiff);
-                w += (dwinc * scdiff);
-            }
+            // next pixel s/t/w
+            s += dsinc;
+            t += dtinc;
+            w += dwinc;
 
-            lodlength = length + scdiff;
+            // LOD for TEXEL1
+            tclod_1cycle_next(wstate, &news, &newt, s, t, w, dsinc, dtinc, dwinc, ycur, prim_tile, &newtile, &sigs,
+                              &prelodfrac);
+            // texture sampling + filtering for TEXEL1
+            texture_pipeline_cycle(wstate, &wstate->texel1_color, &wstate->texel1_color, news, newt, newtile, 0);
+            // the fact that TEXEL1 is next pixel TEXEL0 in 1-cycle mode proves pipelining, the next pixel has passed
+            // through the texture pipeline before the current pixel reaches CC
 
-            sigs.longspan = (lodlength > 7);
-            sigs.midspan = (lodlength == 7);
-            sigs.onelessthanmid = (lodlength == 6);
+            // subpixel correction
+            rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+            z_correct(wstate, offx, offy, &sz, curpixel_cvg);
+            // sz is now u15.3
 
-            for (j = 0; j <= length; j++) {
-                sr = r >> 14;
-                sg = g >> 14;
-                sb = b >> 14;
-                sa = a >> 14;
-                ss = s >> 16;
-                st = t >> 16;
-                sw = w >> 16;
-                sz = (z >> 10) & 0x3fffff;
+            // dither noise
+            if (wstate->other_modes.f.getditherlevel < 2)
+                get_dither_noise(wstate, x, ycur, &cdith, &adith);
 
-                sigs.endspan = (j == length);
-                sigs.preendspan = (j == (length - 1));
+            // combiner
+            combiner_finalstage(wstate, adith, &curpixel_cvg);
 
-                lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+            // image read
+            uint32_t curpixel_memcvg;
+            wstate->fbread1_ptr(wstate, curpixel, &curpixel_memcvg);
 
-                get_texel1_1cycle(wstate, &news, &newt, s, t, w, dsinc, dtinc, dwinc, i, &sigs);
+            // depth compare
+            uint32_t blend_en;
+            uint32_t prewrap;
+            int wen =
+                z_compare(wstate, zbcur, sz, dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg, curpixel_memcvg);
 
-                if (j) {
-                    wstate->texel0_color = wstate->texel1_color;
-                    wstate->lod_frac = prelodfrac;
-                } else {
-                    wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
+            // alpha compare
+            if (wen)
+                wen = alpha_compare(wstate, wstate->pixel_color.a);
 
-                    tclod_1cycle_current(wstate, &sss, &sst, news, newt, s, t, w, dsinc, dtinc, dwinc, i, prim_tile,
-                                         &tile1, &sigs);
+            // coverage rejection
+            // z_compare modifies curpixel_cvg in interpenetrating mode but does not adjust curpixel_cvbit ?? CHECK this
+            if (wen)
+                wen = wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit;
 
-                    texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
-                }
-
-                sigs.nextspan = sigs.endspan;
-                sigs.endspan = sigs.preendspan;
-                sigs.preendspan = (j == (length - 2));
-
-                s += dsinc;
-                t += dtinc;
-                w += dwinc;
-
-                tclod_1cycle_next(wstate, &news, &newt, s, t, w, dsinc, dtinc, dwinc, i, prim_tile, &newtile, &sigs,
-                                  &prelodfrac);
-
-                texture_pipeline_cycle(wstate, &wstate->texel1_color, &wstate->texel1_color, news, newt, newtile, 0);
-
-                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
-                z_correct(wstate, offx, offy, &sz, curpixel_cvg);
-
-                if (wstate->other_modes.f.getditherlevel < 2)
-                    get_dither_noise(wstate, x, i, &cdith, &adith);
-
-                combiner_finalstage(wstate, adith, &curpixel_cvg);
-
-                wstate->fbread1_ptr(wstate, curpixel, &curpixel_memcvg);
-
-                wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg,
-                                curpixel_memcvg);
-
-                if (wen)
-                    wen = alpha_compare(wstate, wstate->pixel_color.a);
-
-                if (wen)
-                    wen = wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit;
-
-                if (wen) {
-                    blender_finalstage(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap,
-                                       wstate->other_modes.f.partialreject_1cycle, 0);
-                    wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
+            // blender + image write
+            if (wen) {
+                uint32_t fir, fig, fib;
+                blender_finalstage(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap,
+                                   wstate->other_modes.f.partialreject_1cycle, 0);
+                wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
+                                    &delayedhbwidx);
+                if (wstate->other_modes.z_update_en)
+                    z_store(zbcur, sz, dzpixenc);
+            } else if (ycur >= wstate->last_overwriting_scanline) {
+                // at or below the last valid scanline that uses more than 1 span allocation
+                // accumulate rejected hidden bits, 8-bit fbs use this for hidden bit writes
+                // since they don't have meaningful hidden bits
+                rejected_hbwrite_1cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg, flip,
                                         &delayedhbwidx);
-                    if (wstate->other_modes.z_update_en)
-                        z_store(zbcur, sz, dzpixenc);
-                } else if (i >= wstate->last_overwriting_scanline)
-                    rejected_hbwrite_1cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
-                                            flip, &delayedhbwidx);
-
-                r += drinc;
-                g += dginc;
-                b += dbinc;
-                a += dainc;
-                z += dzinc;
-
-                x += xinc;
-                curpixel += xinc;
-                zbcur += xinc;
             }
+
+            // advance to next span
+            r += drinc;
+            g += dginc;
+            b += dbinc;
+            a += dainc;
+            z += dzinc;
+            x += xinc;
+            curpixel += xinc;
+            zbcur += xinc;
         }
     }
 
@@ -511,6 +563,7 @@ render_spans_1cycle_complete(struct rdp_state *wstate, int start, int end, int t
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
 
+#if 0
 static void
 render_spans_1cycle_notexel1(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
@@ -689,7 +742,9 @@ render_spans_1cycle_notexel1(struct rdp_state *wstate, int start, int end, int t
     if (delayedhbwidx >= 0 && flip && wstate->fb_size == PIXEL_SIZE_8BIT)
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
+#endif
 
+#if 0
 static void
 render_spans_1cycle_notex(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
@@ -833,251 +888,281 @@ render_spans_1cycle_notex(struct rdp_state *wstate, int start, int end, int tile
     if (delayedhbwidx >= 0 && flip && wstate->fb_size == PIXEL_SIZE_8BIT)
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
+#endif
 
 static void
 render_spans_2cycle_complete(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
-    int zb = wstate->zb_address >> 1;
-    int zbcur;
-    uint8_t offx = 0;
-    uint8_t offy = 0;
-    int32_t prelodfrac;
-    struct color nexttexel1_color;
-    uint32_t blend_en = 0;
-    uint32_t prewrap = 0;
-    uint32_t curpixel_cvg = 0, curpixel_cvbit = 0, curpixel_memcvg = 0;
-    uint32_t nextpixel_cvg;
-    uint32_t acalpha;
-
-    int tile2 = (tilenum + 1) & 7;
-    int tile1 = tilenum;
-    int prim_tile = tilenum;
-    int tile3 = tilenum;
-
-    int i, j;
-
     int drinc, dginc, dbinc, dainc, dzinc, dsinc, dtinc, dwinc;
     int xinc;
+
     if (flip) {
-        drinc = wstate->spans_dr;
-        dginc = wstate->spans_dg;
-        dbinc = wstate->spans_db;
-        dainc = wstate->spans_da;
-        dzinc = wstate->spans_dz;
-        dsinc = wstate->spans_ds;
-        dtinc = wstate->spans_dt;
-        dwinc = wstate->spans_dw;
+        drinc = wstate->spans_drdx;
+        dginc = wstate->spans_dgdx;
+        dbinc = wstate->spans_dbdx;
+        dainc = wstate->spans_dadx;
+        dzinc = wstate->spans_dzdx;
+        dsinc = wstate->spans_dsdx;
+        dtinc = wstate->spans_dtdx;
+        dwinc = wstate->spans_dwdx;
         xinc = 1;
     } else {
-        drinc = -wstate->spans_dr;
-        dginc = -wstate->spans_dg;
-        dbinc = -wstate->spans_db;
-        dainc = -wstate->spans_da;
-        dzinc = -wstate->spans_dz;
-        dsinc = -wstate->spans_ds;
-        dtinc = -wstate->spans_dt;
-        dwinc = -wstate->spans_dw;
+        drinc = -wstate->spans_drdx;
+        dginc = -wstate->spans_dgdx;
+        dbinc = -wstate->spans_dbdx;
+        dainc = -wstate->spans_dadx;
+        dzinc = -wstate->spans_dzdx;
+        dsinc = -wstate->spans_dsdx;
+        dtinc = -wstate->spans_dtdx;
+        dwinc = -wstate->spans_dwdx;
         xinc = -1;
     }
 
-    int dzpix;
-    if (!wstate->other_modes.z_source_sel)
+    // Select source of dz
+
+    uint16_t dzpix;
+    if (wstate->other_modes.z_source_sel == Z_SRC_PIXEL) {
         dzpix = wstate->spans_dzpix;
-    else {
+    } else {
         dzpix = wstate->primitive_delta_z;
-        dzinc = wstate->spans_cdz = wstate->spans_dzdy = 0;
+        dzinc = wstate->spans_cdzdx = wstate->spans_dzdy = 0;
     }
     int dzpixenc = dz_compress(dzpix);
 
+    int zb = wstate->zb_address >> 1;
     int cdith = 7, adith = 0;
 
-    int r, g, b, a, z, s, t, w;
-    int sr, sg, sb, sa, sz, ss, st, sw;
-    int xstart, xend, xendsc;
-    int sss = 0, sst = 0;
-    uint32_t curpixel = 0;
-    int wen = 0;
+    int prim_tile = tilenum;
+    int tile1 = tilenum;
+    int tile2 = (tilenum + 1) & 7;
+    int tile3 = tilenum;
 
-    int x, length, scdiff, lodlength;
-    uint32_t fir, fig, fib;
     int delayedhbwidx = -1;
 
-    for (i = start; i <= end; i++) {
-        if (wstate->span[i].validline) {
+    for (int ycur = start; ycur <= end; ycur++) {
+        if (!wstate->span[ycur].validline)
+            continue;
 
-            xstart = wstate->span[i].lx;
-            xend = wstate->span[i].unscrx;
-            xendsc = wstate->span[i].rx;
-            r = wstate->span[i].r;
-            g = wstate->span[i].g;
-            b = wstate->span[i].b;
-            a = wstate->span[i].a;
-            z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
-            s = wstate->span[i].s;
-            t = wstate->span[i].t;
-            w = wstate->span[i].w;
+        int xstart = wstate->span[ycur].lx;
+        int xend = wstate->span[ycur].unscrx;
+        int xendsc = wstate->span[ycur].rx;
+        int r = wstate->span[ycur].r;
+        int g = wstate->span[ycur].g;
+        int b = wstate->span[ycur].b;
+        int a = wstate->span[ycur].a;
+        // prim z is 15.16 so span z is too
+        int z = (wstate->other_modes.z_source_sel == Z_SRC_PIXEL) ? wstate->span[ycur].z : wstate->primitive_z;
+        int s = wstate->span[ycur].s;
+        int t = wstate->span[ycur].t;
+        int w = wstate->span[ycur].w;
 
-            x = xendsc;
-            curpixel = wstate->fb_width * i + x;
-            zbcur = zb + curpixel;
+        int x = xendsc;
+        uint32_t curpixel = wstate->fb_width * ycur + x;
+        int zbcur = zb + curpixel;
 
-            if (!flip) {
-                length = xendsc - xstart;
-                scdiff = xend - xendsc;
-                compute_cvg_noflip(wstate, i);
+        int length, scdiff;
+        if (!flip) {
+            length = xendsc - xstart;
+            scdiff = xend - xendsc;
+            compute_cvg_noflip(wstate, ycur);
+        } else {
+            length = xstart - xendsc;
+            scdiff = xendsc - xend;
+            compute_cvg_flip(wstate, ycur);
+        }
+
+        if (scdiff) {
+            scdiff &= 0xfff;
+            r += drinc * scdiff;
+            g += dginc * scdiff;
+            b += dbinc * scdiff;
+            a += dainc * scdiff;
+            z += dzinc * scdiff;
+            s += dsinc * scdiff;
+            t += dtinc * scdiff;
+            w += dwinc * scdiff;
+        }
+
+        int lodlength = length + scdiff;
+
+        int sr = r >> 14;
+        int sg = g >> 14;
+        int sb = b >> 14;
+        int sa = a >> 14;
+        int ss = s >> 16;
+        int st = t >> 16;
+        int sw = w >> 16;
+
+        int sss, sst;
+        wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
+
+        tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2, &wstate->lod_frac);
+
+        texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
+        texture_pipeline_cycle(wstate, &wstate->texel1_color, &wstate->texel0_color, sss, sst, tile2, 1);
+
+        // Coverage derived quantities
+        uint8_t offx;
+        uint8_t offy;
+        uint32_t curpixel_cvg, curpixel_cvbit;
+        lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+
+        // RGBA subpixel correction and shade alpha calculation
+        rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+
+        // Dither noise
+        if (wstate->other_modes.f.getditherlevel < 2)
+            get_dither_noise(wstate, x, ycur, &cdith, &adith);
+
+        // First CC cycle
+        // UB: Combined color in first cycle reads prev pixel combined color
+        // NB: angrylion says on https://sourceforge.net/p/angrylions-stuff/tickets/10/ that the combiner will emit a
+        // new "combined color" output on every RDP cycle, even on stalled cycles? This is true, verified on hw
+        uint32_t acalpha;
+        combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
+
+        for (int j = 0; j <= length; j++) {
+            // dsinc is s15.16 so s must be too?
+            s += dsinc;
+            t += dtinc;
+            w += dwinc;
+            // integer part of s?
+            ss = s >> 16;
+            st = t >> 16;
+            sw = w >> 16;
+            int sz = (z >> 10) & 0x3fffff; // z is s15.16 so sz is s15.6
+
+            // Texture perspective correction (next pixel)
+            // (sss, sst) are 17-bit
+            wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
+
+            // Texture pipelining for next pixel
+            int32_t prelodfrac;
+            struct color nexttexel1_color;
+            if (j < length || !wstate->span[ycur + 1].validline || lodlength < 3) {
+                // Same span or next span is invalid
+                tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2, &prelodfrac);
+
+                texture_pipeline_cycle(wstate, &wstate->nexttexel_color, &wstate->nexttexel_color, sss, sst, tile1, 0);
+                texture_pipeline_cycle(wstate, &nexttexel1_color, &wstate->nexttexel_color, sss, sst, tile2, 1);
             } else {
-                length = xstart - xendsc;
-                scdiff = xendsc - xend;
-                compute_cvg_flip(wstate, i);
+                // Next span
+                int sss2, sst2;
+
+                ss = wstate->span[ycur + 1].s >> 16;
+                st = wstate->span[ycur + 1].t >> 16;
+                sw = wstate->span[ycur + 1].w >> 16;
+                wstate->tcdiv_ptr(ss, st, sw, &sss2, &sst2);
+
+                tclod_2cycle_next(wstate, &sss, &sst, &sss2, &sst2, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1,
+                                  &tile3, &prelodfrac, ycur);
+
+                texture_pipeline_cycle(wstate, &wstate->nexttexel_color, &wstate->nexttexel_color, sss, sst, tile1, 0);
+                texture_pipeline_cycle(wstate, &nexttexel1_color, &wstate->nexttexel_color, sss2, sst2, tile3, 0);
             }
 
-            if (scdiff) {
-                scdiff &= 0xfff;
-                r += (drinc * scdiff);
-                g += (dginc * scdiff);
-                b += (dbinc * scdiff);
-                a += (dainc * scdiff);
-                z += (dzinc * scdiff);
-                s += (dsinc * scdiff);
-                t += (dtinc * scdiff);
-                w += (dwinc * scdiff);
-            }
+            // Depth subpixel correction
+            z_correct(wstate, offx, offy, &sz, curpixel_cvg);
 
-            lodlength = length + scdiff;
+            // Advance texture pipeline
+            wstate->texel0_color = wstate->texel1_color;
+            wstate->texel1_color = wstate->nexttexel_color;
 
-            for (j = 0; j <= length; j++) {
-                sz = (z >> 10) & 0x3fffff;
+            // Second CC cycle
+            //! HW BUG: Texture pipeline has already been cycled so TEXEL0 -> TEXEL1 and TEXEL1 -> TEXEL0 of next pixel
+            // TODO what about LOD frac? LOD frac in second cycle might also be next pixel? Use of prelodfrac above
+            // suggests maybe not?
+            combiner_finalstage(wstate, adith, &curpixel_cvg);
 
-                if (!j) {
-                    sr = r >> 14;
-                    sg = g >> 14;
-                    sb = b >> 14;
-                    sa = a >> 14;
-                    ss = s >> 16;
-                    st = t >> 16;
-                    sw = w >> 16;
+            // Image read, blender inputs are not yet updated but zbuffer inputs are? TODO try check hw somehow
+            uint32_t curpixel_memcvg;
+            wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
 
-                    wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
+            // Depth compare
+            uint32_t blend_en;
+            uint32_t prewrap;
+            int wen =
+                z_compare(wstate, zbcur, sz, dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg, curpixel_memcvg);
 
-                    tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2,
-                                 &wstate->lod_frac);
+            // Coverage rejection
+            if (wen)
+                //! weird behavior here: curpixel_cvg can be updated by cvg_x_alpha but curpixel_cvbit
+                //! is NOT updated by it (verified on hardware)
+                wen = wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit;
 
-                    texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
-                    texture_pipeline_cycle(wstate, &wstate->texel1_color, &wstate->texel0_color, sss, sst, tile2, 1);
+            // First blender cycle
+            //! HW BUG: memory color and memory coverage are sourced from previous pixel
+            if (wen)
+                blender_2cycle_cycle0(wstate);
 
-                    lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+            // Update specifically the green component in some edge case?
+            if (!wen && ycur >= wstate->last_overwriting_scanline)
+                blender_2cycle_cycle0_gval(wstate, curpixel);
 
-                    rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+            // Update blender inputs for memory color (and should also do memory cvg here)
+            wstate->memory_color = wstate->pre_memory_color;
 
-                    if (wstate->other_modes.f.getditherlevel < 2)
-                        get_dither_noise(wstate, x, i, &cdith, &adith);
+            // Advance attributes to next pixel
+            x += xinc;
+            r += drinc;
+            g += dginc;
+            b += dbinc;
+            a += dainc;
+            sr = r >> 14;
+            sg = g >> 14;
+            sb = b >> 14;
+            sa = a >> 14;
 
-                    combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
-                }
+            // Coverage mask derived quantities
+            uint32_t nextpixel_cvg;
+            lookup_cvmask_derivatives(j < length ? wstate->cvgbuf[x] : 0, &offx, &offy, &nextpixel_cvg,
+                                      &curpixel_cvbit);
 
-                s += dsinc;
-                t += dtinc;
-                w += dwinc;
+            // RGBA correction and shade alpha for next pixel
+            rgba_correct(wstate, offx, offy, sr, sg, sb, sa, nextpixel_cvg);
 
-                ss = s >> 16;
-                st = t >> 16;
-                sw = w >> 16;
+            // Cycle in lod fraction
+            wstate->lod_frac = prelodfrac;
+            // Cycle TEXEL0 and TEXEL1
+            wstate->texel0_color = wstate->nexttexel_color;
+            wstate->texel1_color = nexttexel1_color;
 
-                wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
+            // CC first cycle for next pixel
+            combiner_2cycle_cycle0(wstate, adith, nextpixel_cvg, &acalpha);
 
-                if (j < length || !wstate->span[i + 1].validline || lodlength < 3) {
-                    tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2,
-                                 &prelodfrac);
+            // Alpha compare
+            //! HW BUG: Uses result of next pixel CC first cycle
+            if (wen)
+                wen = alpha_compare(wstate, acalpha);
 
-                    texture_pipeline_cycle(wstate, &wstate->nexttexel_color, &wstate->nexttexel_color, sss, sst, tile1,
-                                           0);
-                    texture_pipeline_cycle(wstate, &nexttexel1_color, &wstate->nexttexel_color, sss, sst, tile2, 1);
-                } else {
-                    int sss2, sst2;
-
-                    ss = wstate->span[i + 1].s >> 16;
-                    st = wstate->span[i + 1].t >> 16;
-                    sw = wstate->span[i + 1].w >> 16;
-                    wstate->tcdiv_ptr(ss, st, sw, &sss2, &sst2);
-
-                    tclod_2cycle_next(wstate, &sss, &sst, &sss2, &sst2, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1,
-                                      &tile3, &prelodfrac, i);
-
-                    texture_pipeline_cycle(wstate, &wstate->nexttexel_color, &wstate->nexttexel_color, sss, sst, tile1,
-                                           0);
-                    texture_pipeline_cycle(wstate, &nexttexel1_color, &wstate->nexttexel_color, sss2, sst2, tile3, 0);
-                }
-
-                z_correct(wstate, offx, offy, &sz, curpixel_cvg);
-
-                // Advance texture pipeline
-                wstate->texel0_color = wstate->texel1_color;
-                wstate->texel1_color = wstate->nexttexel_color;
-                combiner_finalstage(wstate, adith, &curpixel_cvg);
-
-                wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
-
-                wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg,
-                                curpixel_memcvg);
-
-                if (wen)
-                    wen = wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit;
-
-                if (wen)
-                    blender_2cycle_cycle0(wstate);
-
-                if (!wen && i >= wstate->last_overwriting_scanline)
-                    blender_2cycle_cycle0_gval(wstate, curpixel);
-
-                wstate->memory_color = wstate->pre_memory_color;
-
-                x += xinc;
-
-                r += drinc;
-                g += dginc;
-                b += dbinc;
-                a += dainc;
-
-                sr = r >> 14;
-                sg = g >> 14;
-                sb = b >> 14;
-                sa = a >> 14;
-
-                lookup_cvmask_derivatives(j < length ? wstate->cvgbuf[x] : 0, &offx, &offy, &nextpixel_cvg,
-                                          &curpixel_cvbit);
-
-                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, nextpixel_cvg);
-
-                wstate->lod_frac = prelodfrac;
-                wstate->texel0_color = wstate->nexttexel_color;
-                wstate->texel1_color = nexttexel1_color;
-
-                combiner_2cycle_cycle0(wstate, adith, nextpixel_cvg, &acalpha);
-
-                if (wen)
-                    wen = alpha_compare(wstate, acalpha);
-
-                if (wen) {
-                    blender_finalstage(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap,
-                                       wstate->other_modes.f.partialreject_2cycle, 1);
-                    wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
+            // Blender second cycle of current pixel, image write
+            //! HW BUG: shade alpha was already cycled in for the next pixel, shade alpha in second blender cycle reads
+            //! next pixel
+            if (wen) {
+                uint32_t fir, fig, fib;
+                blender_finalstage(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap,
+                                   wstate->other_modes.f.partialreject_2cycle, 1);
+                wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
+                                    &delayedhbwidx);
+                if (wstate->other_modes.z_update_en)
+                    z_store(zbcur, sz, dzpixenc);
+            } else if (ycur >= wstate->last_overwriting_scanline) {
+                // Do weird hidden bit writes
+                rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg, flip,
                                         &delayedhbwidx);
-                    if (wstate->other_modes.z_update_en)
-                        z_store(zbcur, sz, dzpixenc);
-                } else if (i >= wstate->last_overwriting_scanline)
-                    rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
-                                            flip, &delayedhbwidx);
-
-                if (wstate->other_modes.f.getditherlevel < 2)
-                    get_dither_noise(wstate, x, i, &cdith, &adith);
-
-                curpixel_cvg = nextpixel_cvg;
-
-                z += dzinc;
-
-                curpixel += xinc;
-                zbcur += xinc;
             }
+
+            // Cycle dither noise
+            if (wstate->other_modes.f.getditherlevel < 2)
+                get_dither_noise(wstate, x, ycur, &cdith, &adith);
+
+            // Next pixel becomes current pixel
+            curpixel_cvg = nextpixel_cvg;
+
+            // Advance pos and z
+            curpixel += xinc;
+            z += dzinc;
+            zbcur += xinc;
         }
     }
 
@@ -1085,6 +1170,7 @@ render_spans_2cycle_complete(struct rdp_state *wstate, int start, int end, int t
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
 
+#if 0
 static void
 render_spans_2cycle_notexelnext(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
@@ -1307,7 +1393,9 @@ render_spans_2cycle_notexelnext(struct rdp_state *wstate, int start, int end, in
     if (delayedhbwidx >= 0 && flip && wstate->fb_size == PIXEL_SIZE_8BIT)
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
+#endif
 
+#if 0
 static void
 render_spans_2cycle_notexel1(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
@@ -1525,7 +1613,9 @@ render_spans_2cycle_notexel1(struct rdp_state *wstate, int start, int end, int t
     if (delayedhbwidx >= 0 && flip && wstate->fb_size == PIXEL_SIZE_8BIT)
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
+#endif
 
+#if 0
 static void
 render_spans_2cycle_notex(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
@@ -1708,63 +1798,62 @@ render_spans_2cycle_notex(struct rdp_state *wstate, int start, int end, int tile
     if (delayedhbwidx >= 0 && flip && wstate->fb_size == PIXEL_SIZE_8BIT)
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
+#endif
 
 static void
-render_spans_fill(struct rdp_state *wstate, int start, int end, int flip)
+render_spans_fill(struct rdp_state *wstate, int ystart, int yend, int flip)
 {
+    // FILL mode is unavailable for 4-bit cfb
     if (wstate->fb_size == PIXEL_SIZE_4BIT) {
         rdp_pipeline_crashed = 1;
         return;
     }
 
-    int i, j;
-
+    // Checks for crashing modes
     int fastkillbits = wstate->other_modes.image_read_en || wstate->other_modes.z_compare_en;
     int slowkillbits = wstate->other_modes.z_update_en && !wstate->other_modes.z_source_sel && !fastkillbits;
 
     int xinc = flip ? 1 : -1;
-
-    int xstart = 0, xendsc;
-    int curpixel = 0;
-    int x, length;
     int delayedhbwidx = -1;
 
-    for (i = start; i <= end; i++) {
-        xstart = wstate->span[i].lx;
-        xendsc = wstate->span[i].rx;
+    for (int ycur = ystart; ycur <= yend; ycur++) {
+        if (!wstate->span[ycur].validline)
+            continue;
 
-        x = xendsc;
-        curpixel = wstate->fb_width * i + x;
-        length = flip ? (xstart - xendsc) : (xendsc - xstart);
+        int xstart = wstate->span[ycur].lx;
+        int xendsc = wstate->span[ycur].rx;
+        int length = flip ? (xstart - xendsc) : (xendsc - xstart);
 
-        if (wstate->span[i].validline) {
-            if (fastkillbits && length >= 0) {
-                if (!onetimewarnings.fillmbitcrashes)
-                    msg_warning("render_spans_fill: image_read_en %x z_update_en %x z_compare_en %x. RDP crashed",
-                                wstate->other_modes.image_read_en, wstate->other_modes.z_update_en,
-                                wstate->other_modes.z_compare_en);
-                onetimewarnings.fillmbitcrashes = true;
-                rdp_pipeline_crashed = 1;
-                return;
-            }
+        // im_rd or z_cmp is enabled and we have pixels to draw, crash
+        // These need to happen before color writes since reads of color or z happen before writes
+        if (fastkillbits && length >= 0) {
+            if (!onetimewarnings.fillmbitcrashes)
+                msg_warning("render_spans_fill: image_read_en %x z_update_en %x z_compare_en %x. RDP crashed",
+                            wstate->other_modes.image_read_en, wstate->other_modes.z_update_en,
+                            wstate->other_modes.z_compare_en);
+            onetimewarnings.fillmbitcrashes = true;
+            rdp_pipeline_crashed = 1;
+            return;
+        }
 
-            for (j = 0; j <= length; j++) {
-                wstate->fbfill_ptr(wstate, curpixel, flip, &delayedhbwidx);
+        // Fill the span with the fill color
+        int curpixel = wstate->fb_width * ycur + xendsc;
+        for (int i = 0; i <= length; i++) {
+            wstate->fbfill_ptr(wstate, curpixel, flip, &delayedhbwidx);
+            curpixel += xinc;
+        }
 
-                x += xinc;
-                curpixel += xinc;
-            }
-
-            if (slowkillbits && length >= 0) {
-                if (!onetimewarnings.fillmbitcrashes)
-                    msg_warning("render_spans_fill: image_read_en %x z_update_en %x z_compare_en %x z_source_sel %x. "
-                                "RDP crashed",
-                                wstate->other_modes.image_read_en, wstate->other_modes.z_update_en,
-                                wstate->other_modes.z_compare_en, wstate->other_modes.z_source_sel);
-                onetimewarnings.fillmbitcrashes = 1;
-                rdp_pipeline_crashed = 1;
-                return;
-            }
+        // per-pixel z_upd is enabled and !(IM_RD || Z_CMP)    (note that prim z depth writes also crash the rdp..)
+        // This happens after the color writes since z writes happen after color writes
+        if (slowkillbits && length >= 0) {
+            if (!onetimewarnings.fillmbitcrashes)
+                msg_warning("render_spans_fill: image_read_en %x z_update_en %x z_compare_en %x z_source_sel %x. "
+                            "RDP crashed",
+                            wstate->other_modes.image_read_en, wstate->other_modes.z_update_en,
+                            wstate->other_modes.z_compare_en, wstate->other_modes.z_source_sel);
+            onetimewarnings.fillmbitcrashes = 1;
+            rdp_pipeline_crashed = 1;
+            return;
         }
     }
 
@@ -1775,133 +1864,132 @@ render_spans_fill(struct rdp_state *wstate, int start, int end, int flip)
 static void
 render_spans_copy(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
-    int i, j, k;
-
+    // Copy mode is unavailable for 32-bit cfb,
+    // TMEM is not equipped to output the required amount of data fast enough
     if (wstate->fb_size == PIXEL_SIZE_32BIT) {
         rdp_pipeline_crashed = 1;
         return;
     }
 
-    int tile1 = tilenum;
-    int prim_tile = tilenum;
-
     int dsinc, dtinc, dwinc;
     int xinc;
     if (flip) {
-        dsinc = wstate->spans_ds;
-        dtinc = wstate->spans_dt;
-        dwinc = wstate->spans_dw;
+        dsinc = wstate->spans_dsdx;
+        dtinc = wstate->spans_dtdx;
+        dwinc = wstate->spans_dwdx;
         xinc = 1;
     } else {
-        dsinc = -wstate->spans_ds;
-        dtinc = -wstate->spans_dt;
-        dwinc = -wstate->spans_dw;
+        dsinc = -wstate->spans_dsdx;
+        dtinc = -wstate->spans_dtdx;
+        dwinc = -wstate->spans_dwdx;
         xinc = -1;
     }
 
-    int xstart = 0, xendsc;
-    int s = 0, t = 0, w = 0, ss = 0, st = 0, sw = 0, sss = 0, sst = 0 /*, ssw = 0*/;
-    int fb_index, length;
-    // int diff = 0;
+    int tile1 = tilenum;
+    int prim_tile = tilenum;
 
-    uint32_t hidword = 0, lowdword = 0;
-    // uint32_t hidword1 = 0, lowdword1 = 0;
-    int fbadvance = (wstate->fb_size == PIXEL_SIZE_4BIT) ? 8 : 16 >> wstate->fb_size;
-    uint32_t fbptr = 0;
-    int fbptr_advance = flip ? 8 : -8;
-    uint64_t copyqword = 0;
-    uint32_t tempdword = 0;
-    uint8_t tempbyte = 0;
-    int copywmask = 0, alphamask = 0;
+    int fbadvance = ((wstate->fb_size == PIXEL_SIZE_4BIT) ? 8 : 16) >> wstate->fb_size;
     int bytesperpixel = (wstate->fb_size == PIXEL_SIZE_4BIT) ? 1 : (1 << (wstate->fb_size - 1));
-    uint32_t fbendptr = 0;
-    uint32_t threshold, currthreshold;
+    int fbptr_advance = flip ? 8 : -8;
+
     int delayedhbwidx = -1;
+
+    for (int i = start; i <= end; i++) {
+        if (!wstate->span[i].validline)
+            continue;
+
+        int s = wstate->span[i].s;
+        int t = wstate->span[i].t;
+        int w = wstate->span[i].w;
+
+        int xstart = wstate->span[i].lx;
+        int xendsc = wstate->span[i].rx;
+        int length = flip ? (xstart - xendsc) : (xendsc - xstart);
 
 #define PIXELS_TO_BYTES_SPECIAL4(pix, siz) ((siz) ? PIXELS_TO_BYTES(pix, siz) : (pix))
 
-    for (i = start; i <= end; i++) {
-        if (wstate->span[i].validline) {
+        int fb_index = wstate->fb_width * i + xendsc;
+        int fb_end_index = wstate->fb_width * i + xstart;
+        uint32_t fbptr = wstate->fb_address + PIXELS_TO_BYTES_SPECIAL4(fb_index, wstate->fb_size);
+        uint32_t fbendptr = wstate->fb_address + PIXELS_TO_BYTES_SPECIAL4(fb_end_index, wstate->fb_size);
 
-            s = wstate->span[i].s;
-            t = wstate->span[i].t;
-            w = wstate->span[i].w;
+        for (int j = 0; j <= length; j += fbadvance) {
+            int ss = s >> 16;
+            int st = t >> 16;
+            int sw = w >> 16;
 
-            xstart = wstate->span[i].lx;
-            xendsc = wstate->span[i].rx;
+            // Texture perspective correction
+            int sss, sst;
+            wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
 
-            fb_index = wstate->fb_width * i + xendsc;
-            fbptr = wstate->fb_address + PIXELS_TO_BYTES_SPECIAL4(fb_index, wstate->fb_size);
-            fbendptr = wstate->fb_address + PIXELS_TO_BYTES_SPECIAL4((wstate->fb_width * i + xstart), wstate->fb_size);
-            length = flip ? (xstart - xendsc) : (xendsc - xstart);
+            // Cycle LOD pipeline, the resulting tile is actually used?
+            // TODO is lod_frac computed even if copy mode can't use it? e.g. switch to 1-cycle mode and try to
+            // see it in the first pixel?
+            tclod_copy(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1);
 
-            for (j = 0; j <= length; j += fbadvance) {
-                ss = s >> 16;
-                st = t >> 16;
-                sw = w >> 16;
+            // TMEM sampling
+            uint32_t hidword, lowdword;
+            fetch_qword_copy(wstate, &hidword, &lowdword, sss, sst, tile1);
 
-                wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
+            // When pixel size is 4-bit, force to 0? (still samples TMEM in that it cycles the texture pipeline)
+            uint64_t copyqword = 0;
+            if (wstate->fb_size != PIXEL_SIZE_4BIT)
+                copyqword = ((uint64_t)hidword << 32) | ((uint64_t)lowdword);
 
-                tclod_copy(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1);
+            // Alpha compare write-enable mask
 
-                fetch_qword_copy(wstate, &hidword, &lowdword, sss, sst, tile1);
-
-                if (wstate->fb_size == PIXEL_SIZE_16BIT || wstate->fb_size == PIXEL_SIZE_8BIT)
-                    copyqword = ((uint64_t)hidword << 32) | ((uint64_t)lowdword);
-                else
-                    copyqword = 0;
-
-                if (!wstate->other_modes.alpha_compare_en)
-                    alphamask = 0xff;
-                else if (wstate->fb_size == PIXEL_SIZE_16BIT) {
-                    alphamask = 0;
-                    alphamask |= (((copyqword >> 48) & 1) ? 0xC0 : 0);
-                    alphamask |= (((copyqword >> 32) & 1) ? 0x30 : 0);
-                    alphamask |= (((copyqword >> 16) & 1) ? 0xC : 0);
-                    alphamask |= ((copyqword & 1) ? 0x3 : 0);
-                } else if (wstate->fb_size == PIXEL_SIZE_8BIT) {
-                    alphamask = 0;
-                    threshold =
-                        (wstate->other_modes.dither_alpha_en) ? (irand(&wstate->rseed) & 0xff) : wstate->blend_color.a;
-                    if (wstate->other_modes.dither_alpha_en) {
-                        currthreshold = threshold;
-                        alphamask |= (((copyqword >> 24) & 0xff) >= currthreshold ? 0xC0 : 0);
-                        currthreshold = ((threshold & 3) << 6) | (threshold >> 2);
-                        alphamask |= (((copyqword >> 16) & 0xff) >= currthreshold ? 0x30 : 0);
-                        currthreshold = ((threshold & 0xf) << 4) | (threshold >> 4);
-                        alphamask |= (((copyqword >> 8) & 0xff) >= currthreshold ? 0xC : 0);
-                        currthreshold = ((threshold & 0x3f) << 2) | (threshold >> 6);
-                        alphamask |= ((copyqword & 0xff) >= currthreshold ? 0x3 : 0);
-                    } else {
-                        alphamask |= (((copyqword >> 24) & 0xff) >= threshold ? 0xC0 : 0);
-                        alphamask |= (((copyqword >> 16) & 0xff) >= threshold ? 0x30 : 0);
-                        alphamask |= (((copyqword >> 8) & 0xff) >= threshold ? 0xC : 0);
-                        alphamask |= ((copyqword & 0xff) >= threshold ? 0x3 : 0);
-                    }
-                } else
-                    alphamask = 0;
-
-                copywmask = (flip) ? (fbendptr - fbptr + bytesperpixel) : (fbptr - fbendptr + bytesperpixel);
-
-                if (copywmask > 8)
-                    copywmask = 8;
-                tempdword = fbptr;
-                k = 7;
-                while (copywmask > 0) {
-                    tempbyte = (uint8_t)((copyqword >> (k << 3)) & 0xff);
-                    if (alphamask & (1 << k))
-                        rdram_write_pair8(tempdword, tempbyte, flip, &delayedhbwidx);
-
-                    k--;
-                    tempdword += xinc;
-                    copywmask--;
+            int alphamask;
+            if (!wstate->other_modes.alpha_compare_en) {
+                alphamask = 0xff;
+            } else if (wstate->fb_size == PIXEL_SIZE_16BIT) {
+                // Check LSBit of each 16-bit texel (assumed to be rgba16), alpha compare passes if the bit is set
+                alphamask = 0;
+                alphamask |= (copyqword >> 48 & 1) ? 0xC0 : 0;
+                alphamask |= (copyqword >> 32 & 1) ? 0x30 : 0;
+                alphamask |= (copyqword >> 16 & 1) ? 0x0C : 0;
+                alphamask |= (copyqword >> 0 & 1) ? 0x03 : 0;
+            } else if (wstate->fb_size == PIXEL_SIZE_8BIT) {
+                // Compare each 8-bit texel with configured alpha compare threshold, steps noise for each byte
+                uint8_t threshold0;
+                uint8_t threshold1;
+                uint8_t threshold2;
+                uint8_t threshold3;
+                if (wstate->other_modes.dither_alpha_en) {
+                    threshold0 = irand(&wstate->rseed);
+                    threshold1 = ((threshold0 & 0x03) << 6) | (threshold0 >> 2);
+                    threshold2 = ((threshold0 & 0x0F) << 4) | (threshold0 >> 4);
+                    threshold3 = ((threshold0 & 0x3F) << 2) | (threshold0 >> 6);
+                } else {
+                    threshold0 = threshold1 = threshold2 = threshold3 = wstate->blend_color.a;
                 }
-
-                s += dsinc;
-                t += dtinc;
-                w += dwinc;
-                fbptr += fbptr_advance;
+                alphamask = 0;
+                alphamask |= ((uint8_t)(copyqword >> 24) >= threshold0) ? 0xC0 : 0;
+                alphamask |= ((uint8_t)(copyqword >> 16) >= threshold1) ? 0x30 : 0;
+                alphamask |= ((uint8_t)(copyqword >> 8) >= threshold2) ? 0x0C : 0;
+                alphamask |= ((uint8_t)(copyqword >> 0) >= threshold3) ? 0x03 : 0;
+            } else {
+                // 4-bit always fails alpha compare
+                alphamask = 0;
             }
+
+            // Write
+
+            int copywmask = flip ? (fbendptr - fbptr + bytesperpixel) : (fbptr - fbendptr + bytesperpixel);
+            if (copywmask > 8)
+                copywmask = 8;
+
+            int k;
+            uint32_t tempdword;
+            for (tempdword = fbptr, k = 7; copywmask > 0; copywmask--, k--, tempdword += xinc) {
+                if (alphamask & (1 << k))
+                    rdram_write_pair8(tempdword, copyqword >> (k << 3), flip, &delayedhbwidx);
+            }
+
+            // Increment attributes/pointer
+            s += dsinc;
+            t += dtinc;
+            w += dwinc;
+            fbptr += fbptr_advance;
         }
     }
 
@@ -1912,18 +2000,6 @@ render_spans_copy(struct rdp_state *wstate, int start, int end, int tilenum, int
 static void
 edgewalker_for_prims(struct rdp_state *wstate, uint32_t *ewdata)
 {
-    int j = 0;
-    int xleft = 0, xright = 0, xleft_inc = 0, xright_inc = 0;
-    int r = 0, g = 0, b = 0, a = 0, z = 0, s = 0, t = 0, w = 0;
-    // int dr = 0, dg = 0, db = 0, da = 0;
-    int drdx = 0, dgdx = 0, dbdx = 0, dadx = 0, dzdx = 0, dsdx = 0, dtdx = 0, dwdx = 0;
-    int drdy = 0, dgdy = 0, dbdy = 0, dady = 0, dzdy = 0, dsdy = 0, dtdy = 0, dwdy = 0;
-    int drde = 0, dgde = 0, dbde = 0, dade = 0, dzde = 0, dsde = 0, dtde = 0, dwde = 0;
-    int tilenum = 0, flip = 0;
-    int32_t yl = 0, ym = 0, yh = 0;
-    int32_t xl = 0, xm = 0, xh = 0;
-    int32_t dxldy = 0, dxhdy = 0, dxmdy = 0;
-
     if (wstate->other_modes.f.stalederivs) {
         deduce_derivatives(wstate);
         wstate->other_modes.f.stalederivs = 0;
@@ -1937,133 +2013,140 @@ edgewalker_for_prims(struct rdp_state *wstate, uint32_t *ewdata)
     int oldhb_diff = wstate->fb_size == PIXEL_SIZE_16BIT ? 7 : 3;
     wstate->last_overwriting_scanline = -1;
 
-    flip = (ewdata[0] & 0x800000) != 0;
+    int flip = (ewdata[0] & 0x800000) != 0;
+    int tilenum = (ewdata[0] >> 16) & 7;
     wstate->max_level = (ewdata[0] >> 19) & 7;
-    tilenum = (ewdata[0] >> 16) & 7;
 
-    yl = SIGN(ewdata[0], 14);
-    ym = ewdata[1] >> 16;
-    ym = SIGN(ym, 14);
-    yh = SIGN(ewdata[1], 14);
+    // bit 13 is the sign bit => [-8192, 8191] = [-0x2000, 0x1FFF]
+    // SIGN(x, numb)	(((x) & ((1 << (numb)) - 1)) | -((x) & (1 << ((numb) - 1))))
+    // SIGN(x, 14)	((x & 0x3FFF) | -(x & (1 << 13)))
+    // 0011111111111111
+    // 0010000000000000
+    int32_t yl = SIGN(ewdata[0], 14); // s11.2
+    int32_t ym = SIGN(ewdata[1] >> 16, 14);
+    int32_t yh = SIGN(ewdata[1], 14);
 
-    xl = SIGN(ewdata[2], 28);
-    xh = SIGN(ewdata[4], 28);
-    xm = SIGN(ewdata[6], 28);
+    // bit 27 is the sign bit => [-0x8000000, 0x7FFFFFF]
+    int32_t xl = SIGN(ewdata[2], 28);
+    int32_t xh = SIGN(ewdata[4], 28); // s11.16
+    int32_t xm = SIGN(ewdata[6], 28);
 
-    dxldy = SIGN(ewdata[3], 30);
+    // bit 29 is the sign bit => [-0x20000000, 0x1FFFFFFF]
+    int32_t dxldy = SIGN(ewdata[3], 30);
+    int32_t dxhdy = SIGN(ewdata[5], 30); // s13.16
+    int32_t dxmdy = SIGN(ewdata[7], 30);
 
-    dxhdy = SIGN(ewdata[5], 30);
-    dxmdy = SIGN(ewdata[7], 30);
-
-    r = (ewdata[8] & 0xffff0000) | ((ewdata[12] >> 16) & 0x0000ffff);
-    g = ((ewdata[8] << 16) & 0xffff0000) | (ewdata[12] & 0x0000ffff);
-    b = (ewdata[9] & 0xffff0000) | ((ewdata[13] >> 16) & 0x0000ffff);
-    a = ((ewdata[9] << 16) & 0xffff0000) | (ewdata[13] & 0x0000ffff);
-    drdx = (ewdata[10] & 0xffff0000) | ((ewdata[14] >> 16) & 0x0000ffff);
-    dgdx = ((ewdata[10] << 16) & 0xffff0000) | (ewdata[14] & 0x0000ffff);
-    dbdx = (ewdata[11] & 0xffff0000) | ((ewdata[15] >> 16) & 0x0000ffff);
-    dadx = ((ewdata[11] << 16) & 0xffff0000) | (ewdata[15] & 0x0000ffff);
-    drde = (ewdata[16] & 0xffff0000) | ((ewdata[20] >> 16) & 0x0000ffff);
-    dgde = ((ewdata[16] << 16) & 0xffff0000) | (ewdata[20] & 0x0000ffff);
-    dbde = (ewdata[17] & 0xffff0000) | ((ewdata[21] >> 16) & 0x0000ffff);
-    dade = ((ewdata[17] << 16) & 0xffff0000) | (ewdata[21] & 0x0000ffff);
-    drdy = (ewdata[18] & 0xffff0000) | ((ewdata[22] >> 16) & 0x0000ffff);
-    dgdy = ((ewdata[18] << 16) & 0xffff0000) | (ewdata[22] & 0x0000ffff);
-    dbdy = (ewdata[19] & 0xffff0000) | ((ewdata[23] >> 16) & 0x0000ffff);
-    dady = ((ewdata[19] << 16) & 0xffff0000) | (ewdata[23] & 0x0000ffff);
-
-    s = (ewdata[24] & 0xffff0000) | ((ewdata[28] >> 16) & 0x0000ffff);
-    t = ((ewdata[24] << 16) & 0xffff0000) | (ewdata[28] & 0x0000ffff);
-    w = (ewdata[25] & 0xffff0000) | ((ewdata[29] >> 16) & 0x0000ffff);
-    dsdx = (ewdata[26] & 0xffff0000) | ((ewdata[30] >> 16) & 0x0000ffff);
-    dtdx = ((ewdata[26] << 16) & 0xffff0000) | (ewdata[30] & 0x0000ffff);
-    dwdx = (ewdata[27] & 0xffff0000) | ((ewdata[31] >> 16) & 0x0000ffff);
-    dsde = (ewdata[32] & 0xffff0000) | ((ewdata[36] >> 16) & 0x0000ffff);
-    dtde = ((ewdata[32] << 16) & 0xffff0000) | (ewdata[36] & 0x0000ffff);
-    dwde = (ewdata[33] & 0xffff0000) | ((ewdata[37] >> 16) & 0x0000ffff);
-    dsdy = (ewdata[34] & 0xffff0000) | ((ewdata[38] >> 16) & 0x0000ffff);
-    dtdy = ((ewdata[34] << 16) & 0xffff0000) | (ewdata[38] & 0x0000ffff);
-    dwdy = (ewdata[35] & 0xffff0000) | ((ewdata[39] >> 16) & 0x0000ffff);
-
-    z = ewdata[40];
-    dzdx = ewdata[41];
-    dzde = ewdata[42];
-    dzdy = ewdata[43];
-
-    wstate->spans_ds = dsdx & ~0x1f;
-    wstate->spans_dt = dtdx & ~0x1f;
-    wstate->spans_dw = dwdx & ~0x1f;
-    wstate->spans_dr = drdx & ~0x1f;
-    wstate->spans_dg = dgdx & ~0x1f;
-    wstate->spans_db = dbdx & ~0x1f;
-    wstate->spans_da = dadx & ~0x1f;
-    wstate->spans_dz = dzdx;
-
-    wstate->spans_drdy = drdy >> 14;
-    wstate->spans_dgdy = dgdy >> 14;
-    wstate->spans_dbdy = dbdy >> 14;
-    wstate->spans_dady = dady >> 14;
-    wstate->spans_dzdy = dzdy >> 10;
-    wstate->spans_drdy = SIGN(wstate->spans_drdy, 13);
-    wstate->spans_dgdy = SIGN(wstate->spans_dgdy, 13);
-    wstate->spans_dbdy = SIGN(wstate->spans_dbdy, 13);
-    wstate->spans_dady = SIGN(wstate->spans_dady, 13);
-    wstate->spans_dzdy = SIGN(wstate->spans_dzdy, 22);
-    wstate->spans_cdr = wstate->spans_dr >> 14;
-    wstate->spans_cdr = SIGN(wstate->spans_cdr, 13);
-    wstate->spans_cdg = wstate->spans_dg >> 14;
-    wstate->spans_cdg = SIGN(wstate->spans_cdg, 13);
-    wstate->spans_cdb = wstate->spans_db >> 14;
-    wstate->spans_cdb = SIGN(wstate->spans_cdb, 13);
-    wstate->spans_cda = wstate->spans_da >> 14;
-    wstate->spans_cda = SIGN(wstate->spans_cda, 13);
-    wstate->spans_cdz = wstate->spans_dz >> 10;
-    wstate->spans_cdz = SIGN(wstate->spans_cdz, 22);
-
-    wstate->spans_dsdy = dsdy & ~0x7fff;
-    wstate->spans_dtdy = dtdy & ~0x7fff;
-    wstate->spans_dwdy = dwdy & ~0x7fff;
-
-    int dzdy_dz = (dzdy >> 16) & 0xffff;
-    int dzdx_dz = (dzdx >> 16) & 0xffff;
-
-    wstate->spans_dzpix =
-        ((dzdy_dz & 0x8000) ? ((~dzdy_dz) & 0x7fff) : dzdy_dz) + ((dzdx_dz & 0x8000) ? ((~dzdx_dz) & 0x7fff) : dzdx_dz);
-    wstate->spans_dzpix = normalize_dzpix(wstate->spans_dzpix & 0xffff) & 0xffff;
-
-    xleft_inc = (dxmdy >> 2) & ~0x1;
-    xright_inc = (dxhdy >> 2) & ~0x1;
-
-    xright = xh & ~0x1;
-    xleft = xm & ~0x1;
-
-    int k = 0;
-
-    int dsdiff, dtdiff, dwdiff, drdiff, dgdiff, dbdiff, dadiff, dzdiff;
+    // wacky, dxhdy sign bit is the ORIGINAL bit 31 prior to sign extending?
     int sign_dxhdy = (ewdata[5] & 0x80000000) != 0;
 
-    int dsdeh, dtdeh, dwdeh, drdeh, dgdeh, dbdeh, dadeh, dzdeh, dsdyh, dtdyh, dwdyh, drdyh, dgdyh, dbdyh, dadyh, dzdyh;
-    int do_offset = !(sign_dxhdy ^ flip);
+    // unpack shade coefficients (9.16)
+    int r = (ewdata[8] & 0xffff0000) | ((ewdata[12] >> 16) & 0x0000ffff);
+    int g = ((ewdata[8] << 16) & 0xffff0000) | (ewdata[12] & 0x0000ffff);
+    int b = (ewdata[9] & 0xffff0000) | ((ewdata[13] >> 16) & 0x0000ffff);
+    int a = ((ewdata[9] << 16) & 0xffff0000) | (ewdata[13] & 0x0000ffff);
 
-    if (do_offset) {
-        dsdeh = dsde & ~0x1ff;
-        dtdeh = dtde & ~0x1ff;
-        dwdeh = dwde & ~0x1ff;
-        drdeh = drde & ~0x1ff;
-        dgdeh = dgde & ~0x1ff;
-        dbdeh = dbde & ~0x1ff;
-        dadeh = dade & ~0x1ff;
-        dzdeh = dzde & ~0x1ff;
+    // s15.16
+    int drdx = (ewdata[10] & 0xffff0000) | ((ewdata[14] >> 16) & 0x0000ffff); // 0x7FFFFFF, sign at bit 27
+    int dgdx = ((ewdata[10] << 16) & 0xffff0000) | (ewdata[14] & 0x0000ffff);
+    int dbdx = (ewdata[11] & 0xffff0000) | ((ewdata[15] >> 16) & 0x0000ffff);
+    int dadx = ((ewdata[11] << 16) & 0xffff0000) | (ewdata[15] & 0x0000ffff);
+    // s15.16
+    int drde = (ewdata[16] & 0xffff0000) | ((ewdata[20] >> 16) & 0x0000ffff);
+    int dgde = ((ewdata[16] << 16) & 0xffff0000) | (ewdata[20] & 0x0000ffff);
+    int dbde = (ewdata[17] & 0xffff0000) | ((ewdata[21] >> 16) & 0x0000ffff);
+    int dade = ((ewdata[17] << 16) & 0xffff0000) | (ewdata[21] & 0x0000ffff);
+    // s15.16
+    int drdy = (ewdata[18] & 0xffff0000) | ((ewdata[22] >> 16) & 0x0000ffff);
+    int dgdy = ((ewdata[18] << 16) & 0xffff0000) | (ewdata[22] & 0x0000ffff);
+    int dbdy = (ewdata[19] & 0xffff0000) | ((ewdata[23] >> 16) & 0x0000ffff);
+    int dady = ((ewdata[19] << 16) & 0xffff0000) | (ewdata[23] & 0x0000ffff);
 
-        dsdyh = dsdy & ~0x1ff;
-        dtdyh = dtdy & ~0x1ff;
-        dwdyh = dwdy & ~0x1ff;
-        drdyh = drdy & ~0x1ff;
-        dgdyh = dgdy & ~0x1ff;
-        dbdyh = dbdy & ~0x1ff;
-        dadyh = dady & ~0x1ff;
-        dzdyh = dzdy & ~0x1ff;
+    // unpack texture coefficients
+    // s,t,w are s10.21
+    // d[stw]d[xye] are s15.11 ???
+    int s = (ewdata[24] & 0xffff0000) | ((ewdata[28] >> 16) & 0x0000ffff);
+    int t = ((ewdata[24] << 16) & 0xffff0000) | (ewdata[28] & 0x0000ffff);
+    int w = (ewdata[25] & 0xffff0000) | ((ewdata[29] >> 16) & 0x0000ffff);
+    int dsdx = (ewdata[26] & 0xffff0000) | ((ewdata[30] >> 16) & 0x0000ffff);
+    int dtdx = ((ewdata[26] << 16) & 0xffff0000) | (ewdata[30] & 0x0000ffff);
+    int dwdx = (ewdata[27] & 0xffff0000) | ((ewdata[31] >> 16) & 0x0000ffff);
+    int dsde = (ewdata[32] & 0xffff0000) | ((ewdata[36] >> 16) & 0x0000ffff);
+    int dtde = ((ewdata[32] << 16) & 0xffff0000) | (ewdata[36] & 0x0000ffff);
+    int dwde = (ewdata[33] & 0xffff0000) | ((ewdata[37] >> 16) & 0x0000ffff);
+    int dsdy = (ewdata[34] & 0xffff0000) | ((ewdata[38] >> 16) & 0x0000ffff);
+    int dtdy = ((ewdata[34] << 16) & 0xffff0000) | (ewdata[38] & 0x0000ffff);
+    int dwdy = (ewdata[35] & 0xffff0000) | ((ewdata[39] >> 16) & 0x0000ffff);
 
+    // unpack depth coefficients
+    int z = ewdata[40];    // s15.16
+    int dzdx = ewdata[41]; // s15.16
+    int dzde = ewdata[42]; // s15.16
+    int dzdy = ewdata[43]; // s15.16
+
+    // d*dx, remove lower 5 bits for all but z
+    wstate->spans_dsdx = dsdx & ~0x1f;
+    wstate->spans_dtdx = dtdx & ~0x1f;
+    wstate->spans_dwdx = dwdx & ~0x1f;
+    wstate->spans_drdx = drdx & ~0x1f;
+    wstate->spans_dgdx = dgdx & ~0x1f;
+    wstate->spans_dbdx = dbdx & ~0x1f;
+    wstate->spans_dadx = dadx & ~0x1f;
+    wstate->spans_dzdx = dzdx;
+
+    // d*dx for subpixel correction
+    wstate->spans_cdrdx = SIGN(wstate->spans_drdx >> 14, 13); // [-0x1000, 0xFFF]     s10.2 ?
+    wstate->spans_cdgdx = SIGN(wstate->spans_dgdx >> 14, 13);
+    wstate->spans_cdbdx = SIGN(wstate->spans_dbdx >> 14, 13);
+    wstate->spans_cdadx = SIGN(wstate->spans_dadx >> 14, 13);
+    // sign is in bit 31 originally, so it's in bit 21 after shifting right by 10
+    wstate->spans_cdzdx = SIGN(wstate->spans_dzdx >> 10, 22);
+
+    // d*dy
+    wstate->spans_dsdy = dsdy & ~0x7fff; // remove lower 15 bits
+    wstate->spans_dtdy = dtdy & ~0x7fff;
+    wstate->spans_dwdy = dwdy & ~0x7fff;
+    wstate->spans_drdy = SIGN(drdy >> 14, 13); // [-0x1000, 0xFFF]
+    wstate->spans_dgdy = SIGN(dgdy >> 14, 13);
+    wstate->spans_dbdy = SIGN(dbdy >> 14, 13);
+    wstate->spans_dady = SIGN(dady >> 14, 13);
+    wstate->spans_dzdy = SIGN(dzdy >> 10, 22);
+
+    // Compute pixel dz value
+    // extract integer parts, sign bits in bit 15
+    int dzdy_dz = (dzdy >> 16) & 0xffff;
+    int dzdx_dz = (dzdx >> 16) & 0xffff;
+    // this abs() is 1-off for negative values
+#define ABS16(x) (((x)&0x8000) ? ((~(x)) & 0x7fff) : (x))
+    wstate->spans_dzpix = ABS16(dzdx_dz) + ABS16(dzdy_dz);
+    wstate->spans_dzpix = normalize_dzpix(wstate->spans_dzpix);
+
+    int xleft_inc = (dxmdy >> 2) & ~1;
+    int xright_inc = (dxhdy >> 2) & ~1;
+
+    int xleft = xm & ~1;
+    int xright = xh & ~1;
+
+    int dsdiff, dtdiff, dwdiff, drdiff, dgdiff, dbdiff, dadiff, dzdiff;
+    if (!(sign_dxhdy ^ flip)) {
+        int dsdeh = dsde & ~0x1ff;
+        int dtdeh = dtde & ~0x1ff;
+        int dwdeh = dwde & ~0x1ff;
+        int drdeh = drde & ~0x1ff;
+        int dgdeh = dgde & ~0x1ff;
+        int dbdeh = dbde & ~0x1ff;
+        int dadeh = dade & ~0x1ff;
+        int dzdeh = dzde & ~0x1ff;
+
+        int dsdyh = dsdy & ~0x1ff;
+        int dtdyh = dtdy & ~0x1ff;
+        int dwdyh = dwdy & ~0x1ff;
+        int drdyh = drdy & ~0x1ff;
+        int dgdyh = dgdy & ~0x1ff;
+        int dbdyh = dbdy & ~0x1ff;
+        int dadyh = dady & ~0x1ff;
+        int dzdyh = dzdy & ~0x1ff;
+
+        // x - x >> 2 ~= 3 * x / 4
         dsdiff = dsdeh - (dsdeh >> 2) - dsdyh + (dsdyh >> 2);
         dtdiff = dtdeh - (dtdeh >> 2) - dtdyh + (dtdyh >> 2);
         dwdiff = dwdeh - (dwdeh >> 2) - dwdyh + (dwdyh >> 2);
@@ -2072,11 +2155,9 @@ edgewalker_for_prims(struct rdp_state *wstate, uint32_t *ewdata)
         dbdiff = dbdeh - (dbdeh >> 2) - dbdyh + (dbdyh >> 2);
         dadiff = dadeh - (dadeh >> 2) - dadyh + (dadyh >> 2);
         dzdiff = dzdeh - (dzdeh >> 2) - dzdyh + (dzdyh >> 2);
-
-    } else
+    } else {
         dsdiff = dtdiff = dwdiff = drdiff = dgdiff = dbdiff = dadiff = dzdiff = 0;
-
-    int xfrac = 0;
+    }
 
     int dsdxh, dtdxh, dwdxh, drdxh, dgdxh, dbdxh, dadxh, dzdxh;
     if (wstate->other_modes.cycle_type != CYCLE_TYPE_COPY) {
@@ -2088,245 +2169,173 @@ edgewalker_for_prims(struct rdp_state *wstate, uint32_t *ewdata)
         dbdxh = (dbdx >> 8) & ~1;
         dadxh = (dadx >> 8) & ~1;
         dzdxh = (dzdx >> 8) & ~1;
-    } else
+    } else {
         dsdxh = dtdxh = dwdxh = drdxh = dgdxh = dbdxh = dadxh = dzdxh = 0;
+    }
 
-#define ADJUST_ATTR_PRIM()                                                      \
-    {                                                                           \
-        wstate->span[j].s = ((s & ~0x1ff) + dsdiff - (xfrac * dsdxh)) & ~0x3ff; \
-        wstate->span[j].t = ((t & ~0x1ff) + dtdiff - (xfrac * dtdxh)) & ~0x3ff; \
-        wstate->span[j].w = ((w & ~0x1ff) + dwdiff - (xfrac * dwdxh)) & ~0x3ff; \
-        wstate->span[j].r = ((r & ~0x1ff) + drdiff - (xfrac * drdxh)) & ~0x3ff; \
-        wstate->span[j].g = ((g & ~0x1ff) + dgdiff - (xfrac * dgdxh)) & ~0x3ff; \
-        wstate->span[j].b = ((b & ~0x1ff) + dbdiff - (xfrac * dbdxh)) & ~0x3ff; \
-        wstate->span[j].a = ((a & ~0x1ff) + dadiff - (xfrac * dadxh)) & ~0x3ff; \
-        wstate->span[j].z = ((z & ~0x1ff) + dzdiff - (xfrac * dzdxh)) & ~0x3ff; \
-    }                                                                           \
-    (void)0
-
-#define ADDVALUES_PRIM() \
-    {                    \
-        s += dsde;       \
-        t += dtde;       \
-        w += dwde;       \
-        r += drde;       \
-        g += dgde;       \
-        b += dbde;       \
-        a += dade;       \
-        z += dzde;       \
-    }                    \
-    (void)0
-
-    int32_t maxxmx = 0, minxmx = 0, maxxhx = 0, minxhx = 0;
-
-    int spix = 0;
-    int ycur = yh & ~3;
+    int ystart = yh & ~3;
     int ldflag = (sign_dxhdy ^ flip) ? 0 : 3;
-    int invaly = 1;
-    // int length = 0;
-    int32_t xrsc = 0, xlsc = 0, stickybit = 0;
-    int32_t yllimit = 0, yhlimit = 0;
-    if (yl & 0x2000)
-        yllimit = 1;
-    else if (yl & 0x1000)
-        yllimit = 0;
+
+    // Compute the yl limit and yl "far"
+
+    int32_t yllimit; // = min(yl, wstate->clip.yl)
+    bool yl_in_clip;
+    if (yl & (1 << 13)) // yl is negative, always < clip.yl since clip.yl is unsigned
+        yl_in_clip = true;
+    else if (yl & (1 << 12)) // yl is very positive, clip.yl is only 10.2 fixed point so this is always > clip.yl
+        yl_in_clip = false;
     else
-        yllimit = (yl & 0xfff) < wstate->clip.yl;
-    yllimit = yllimit ? yl : wstate->clip.yl;
+        yl_in_clip = (yl & 0xfff) < wstate->clip.yl; // clip.yl is 10.2 fixed point
+    yllimit = yl_in_clip ? yl : wstate->clip.yl;
 
     int ylfar = yllimit | 3;
-    if ((yl >> 2) > (ylfar >> 2))
+    if ((yl >> 2) > (ylfar >> 2)) // increment 1 extra line if yl integer is larger than ylfar integer
         ylfar += 4;
-    else if ((yllimit >> 2) >= 0 && (yllimit >> 2) < 1023)
-        wstate->span[(yllimit >> 2) + 1].validline = 0;
+    else if ((yllimit >> 2) >= 0 && (yllimit >> 2) < 1023)  // yllimit integer in [0,1022]
+        wstate->span[(yllimit >> 2) + 1].validline = false; // invalidate next line?
 
-    if (yh & 0x2000)
-        yhlimit = 0;
-    else if (yh & 0x1000)
-        yhlimit = 1;
+    // Compute the yh limit and yh "close"
+    int32_t yhlimit; // = max(yh, wstate->clip.yh)
+    bool yh_in_clip;
+    if (yh & (1 << 13))
+        yh_in_clip = false;
+    else if (yh & (1 << 12))
+        yh_in_clip = true;
     else
-        yhlimit = (yh >= wstate->clip.yh);
-    yhlimit = yhlimit ? yh : wstate->clip.yh;
+        yh_in_clip = yh >= wstate->clip.yh;
+    yhlimit = yh_in_clip ? yh : wstate->clip.yh;
 
     int yhclose = yhlimit & ~3;
 
+    // Pre-shift the clip x limits before entering the loop
     int32_t clipxlshift = wstate->clip.xl << 1;
     int32_t clipxhshift = wstate->clip.xh << 1;
-    int allover = 1, allunder = 1, curover = 0, curunder = 0;
-    int allinval = 1;
-    int32_t curcross = 0;
 
-    xfrac = ((xright >> 8) & 0xff);
+    // These three variables are always initialized before use, but compiler may complain
+    bool allover = true;
+    bool allunder = true;
+    bool allinval = true;
+    int32_t minx = 0;
+    int32_t maxx = 0;
 
-    if (flip) {
-        for (k = ycur; k <= ylfar; k++) {
-            if (k == ym) {
+    int xfrac;
 
-                xleft = xl & ~1;
-                xleft_inc = (dxldy >> 2) & ~1;
-            }
-
-            spix = k & 3;
-
-            if (k >= yhclose) {
-                invaly = k < yhlimit || k >= yllimit;
-
-                j = k >> 2;
-
-                if (spix == 0) {
-                    maxxmx = 0;
-                    minxhx = 0xfff;
-                    allover = allunder = 1;
-                    allinval = 1;
-                }
-
-                stickybit = ((xright >> 1) & 0x1fff) > 0;
-                xrsc = ((xright >> 13) & 0x1ffe) | stickybit;
-
-                curunder = ((xright & 0x8000000) || (xrsc < clipxhshift && !(xright & 0x4000000)));
-
-                xrsc = curunder ? clipxhshift : (((xright >> 13) & 0x3ffe) | stickybit);
-                curover = ((xrsc & 0x2000) || (xrsc & 0x1fff) >= clipxlshift);
-                xrsc = curover ? clipxlshift : xrsc;
-                wstate->span[j].majorx[spix] = xrsc & 0x1fff;
-                allover &= curover;
-                allunder &= curunder;
-
-                stickybit = ((xleft >> 1) & 0x1fff) > 0;
-                xlsc = ((xleft >> 13) & 0x1ffe) | stickybit;
-                curunder = ((xleft & 0x8000000) || (xlsc < clipxhshift && !(xleft & 0x4000000)));
-                xlsc = curunder ? clipxhshift : (((xleft >> 13) & 0x3ffe) | stickybit);
-                curover = ((xlsc & 0x2000) || (xlsc & 0x1fff) >= clipxlshift);
-                xlsc = curover ? clipxlshift : xlsc;
-                wstate->span[j].minorx[spix] = xlsc & 0x1fff;
-                allover &= curover;
-                allunder &= curunder;
-
-                curcross = ((xleft ^ (1 << 27)) & (0x3fff << 14)) < ((xright ^ (1 << 27)) & (0x3fff << 14));
-
-                invaly |= curcross;
-                wstate->span[j].invalyscan[spix] = invaly;
-                allinval &= invaly;
-
-                if (!invaly) {
-                    maxxmx = (((xlsc >> 3) & 0xfff) > maxxmx) ? (xlsc >> 3) & 0xfff : maxxmx;
-                    minxhx = (((xrsc >> 3) & 0xfff) < minxhx) ? (xrsc >> 3) & 0xfff : minxhx;
-                }
-
-                if (spix == ldflag) {
-
-                    wstate->span[j].unscrx = SIGN(xright >> 16, 12);
-                    xfrac = (xright >> 8) & 0xff;
-                    ADJUST_ATTR_PRIM();
-                }
-
-                if (spix == 3) {
-                    wstate->span[j].lx = maxxmx;
-                    wstate->span[j].rx = minxhx;
-                    wstate->span[j].validline =
-                        !allinval && !allover && !allunder &&
-                        (!wstate->scfield || (wstate->scfield && !(wstate->sckeepodd ^ (j & 1))));
-
-                    if (wstate->span[j].validline && wstate->fb_size > PIXEL_SIZE_8BIT)
-                        if ((wstate->span[j].lx - wstate->span[j].rx) >= oldhb_diff)
-                            wstate->last_overwriting_scanline = j;
-
-                    // skip line if not assigned to this worker
-                    wstate->span[j].validline &= (!wstate->stride || j % wstate->stride == wstate->offset);
-                }
-            }
-
-            if (spix == 3) {
-                ADDVALUES_PRIM();
-            }
-
-            xleft += xleft_inc;
-            xright += xright_inc;
+    for (int ycur = ystart; ycur <= ylfar; ycur++) {
+        if (ycur == ym) {
+            xleft = xl & ~1;
+            xleft_inc = (dxldy >> 2) & ~1;
         }
-    } else {
-        for (k = ycur; k <= ylfar; k++) {
-            if (k == ym) {
-                xleft = xl & ~1;
-                xleft_inc = (dxldy >> 2) & ~1;
+
+        int ycur_int = ycur >> 2;
+        int ycur_frac = ycur & 3;
+
+        if (ycur >= yhclose) {
+            bool invaly = ycur < yhlimit || ycur >= yllimit;
+
+            if (ycur_frac == 0) {
+                maxx = 0;
+                minx = 0xfff;
+                allover = allunder = true;
+                allinval = true;
             }
 
-            spix = k & 3;
+            bool stickybit_r = (xright >> 1 & 0x1fff) > 0;
+            bool stickybit_l = (xleft >> 1 & 0x1fff) > 0;
 
-            if (k >= yhclose) {
-                invaly = k < yhlimit || k >= yllimit;
-                j = k >> 2;
+            int32_t xrsc = (xright >> 13 & 0x1ffe) | stickybit_r;
+            int32_t xlsc = (xleft >> 13 & 0x1ffe) | stickybit_l;
 
-                if (spix == 0) {
-                    maxxhx = 0;
-                    minxmx = 0xfff;
-                    allover = allunder = 1;
-                    allinval = 1;
-                }
+            bool curunder_r = (xright & 0x8000000) || (xrsc < clipxhshift && !(xright & 0x4000000));
+            bool curunder_l = (xleft & 0x8000000) || (xlsc < clipxhshift && !(xleft & 0x4000000));
 
-                stickybit = ((xright >> 1) & 0x1fff) > 0;
-                xrsc = ((xright >> 13) & 0x1ffe) | stickybit;
-                curunder = ((xright & 0x8000000) || (xrsc < clipxhshift && !(xright & 0x4000000)));
-                xrsc = curunder ? clipxhshift : (((xright >> 13) & 0x3ffe) | stickybit);
-                curover = ((xrsc & 0x2000) || (xrsc & 0x1fff) >= clipxlshift);
-                xrsc = curover ? clipxlshift : xrsc;
-                wstate->span[j].majorx[spix] = xrsc & 0x1fff;
-                allover &= curover;
-                allunder &= curunder;
+            xrsc = curunder_r ? clipxhshift : ((xright >> 13 & 0x3ffe) | stickybit_r);
+            xlsc = curunder_l ? clipxhshift : ((xleft >> 13 & 0x3ffe) | stickybit_l);
 
-                stickybit = ((xleft >> 1) & 0x1fff) > 0;
-                xlsc = ((xleft >> 13) & 0x1ffe) | stickybit;
-                curunder = ((xleft & 0x8000000) || (xlsc < clipxhshift && !(xleft & 0x4000000)));
-                xlsc = curunder ? clipxhshift : (((xleft >> 13) & 0x3ffe) | stickybit);
-                curover = ((xlsc & 0x2000) || (xlsc & 0x1fff) >= clipxlshift);
-                xlsc = curover ? clipxlshift : xlsc;
-                wstate->span[j].minorx[spix] = xlsc & 0x1fff;
-                allover &= curover;
-                allunder &= curunder;
+            bool curover_r = (xrsc & 0x2000) || (xrsc & 0x1fff) >= clipxlshift;
+            bool curover_l = (xlsc & 0x2000) || (xlsc & 0x1fff) >= clipxlshift;
 
-                curcross = ((xright ^ (1 << 27)) & (0x3fff << 14)) < ((xleft ^ (1 << 27)) & (0x3fff << 14));
+            xrsc = curover_r ? clipxlshift : xrsc;
+            xlsc = curover_l ? clipxlshift : xlsc;
 
-                invaly |= curcross;
-                wstate->span[j].invalyscan[spix] = invaly;
-                allinval &= invaly;
+            wstate->span[ycur_int].majorx[ycur_frac] = xrsc & 0x1fff;
+            wstate->span[ycur_int].minorx[ycur_frac] = xlsc & 0x1fff;
 
-                if (!invaly) {
-                    minxmx = (((xlsc >> 3) & 0xfff) < minxmx) ? (xlsc >> 3) & 0xfff : minxmx;
-                    maxxhx = (((xrsc >> 3) & 0xfff) > maxxhx) ? (xrsc >> 3) & 0xfff : maxxhx;
-                }
+            allover &= curover_r & curover_l;
+            allunder &= curunder_r & curunder_l;
 
-                if (spix == ldflag) {
-                    wstate->span[j].unscrx = SIGN(xright >> 16, 12);
-                    xfrac = (xright >> 8) & 0xff;
-                    ADJUST_ATTR_PRIM();
-                }
+            if (flip)
+                invaly |= ((xleft ^ (1 << 27)) & (0x3fff << 14)) < ((xright ^ (1 << 27)) & (0x3fff << 14));
+            else
+                invaly |= ((xright ^ (1 << 27)) & (0x3fff << 14)) < ((xleft ^ (1 << 27)) & (0x3fff << 14));
 
-                if (spix == 3) {
-                    wstate->span[j].lx = minxmx;
-                    wstate->span[j].rx = maxxhx;
-                    wstate->span[j].validline =
-                        !allinval && !allover && !allunder &&
-                        (!wstate->scfield || (wstate->scfield && !(wstate->sckeepodd ^ (j & 1))));
+            wstate->span[ycur_int].invalyscan[ycur_frac] = invaly;
+            allinval &= invaly;
 
-                    if (wstate->span[j].validline && wstate->fb_size > PIXEL_SIZE_8BIT)
-                        if ((wstate->span[j].rx - wstate->span[j].lx) >= oldhb_diff)
-                            wstate->last_overwriting_scanline = j;
-
-                    // skip line if not assigned to this worker
-                    wstate->span[j].validline &= (!wstate->stride || j % wstate->stride == wstate->offset);
+            if (!invaly) {
+                if (flip) {
+                    maxx = MAX(xlsc >> 3 & 0xfff, maxx);
+                    minx = MIN(xrsc >> 3 & 0xfff, minx);
+                } else {
+                    maxx = MAX(xrsc >> 3 & 0xfff, maxx);
+                    minx = MIN(xlsc >> 3 & 0xfff, minx);
                 }
             }
 
-            if (spix == 3) {
-                ADDVALUES_PRIM();
+            if (ycur_frac == ldflag) {
+                wstate->span[ycur_int].unscrx = SIGN(xright >> 16, 12);
+                xfrac = (xright >> 8) & 0xff;
+                wstate->span[ycur_int].s = ((s & ~0x1ff) + dsdiff - (xfrac * dsdxh)) & ~0x3ff;
+                wstate->span[ycur_int].t = ((t & ~0x1ff) + dtdiff - (xfrac * dtdxh)) & ~0x3ff;
+                wstate->span[ycur_int].w = ((w & ~0x1ff) + dwdiff - (xfrac * dwdxh)) & ~0x3ff;
+                wstate->span[ycur_int].r = ((r & ~0x1ff) + drdiff - (xfrac * drdxh)) & ~0x3ff;
+                wstate->span[ycur_int].g = ((g & ~0x1ff) + dgdiff - (xfrac * dgdxh)) & ~0x3ff;
+                wstate->span[ycur_int].b = ((b & ~0x1ff) + dbdiff - (xfrac * dbdxh)) & ~0x3ff;
+                wstate->span[ycur_int].a = ((a & ~0x1ff) + dadiff - (xfrac * dadxh)) & ~0x3ff;
+                wstate->span[ycur_int].z = ((z & ~0x1ff) + dzdiff - (xfrac * dzdxh)) & ~0x3ff;
             }
 
-            xleft += xleft_inc;
-            xright += xright_inc;
+            if (ycur_frac == 3) {
+                wstate->span[ycur_int].lx = flip ? maxx : minx;
+                wstate->span[ycur_int].rx = flip ? minx : maxx;
+                wstate->span[ycur_int].validline =
+                    !allinval && !allover && !allunder &&
+                    (!wstate->scfield || (wstate->scfield && !(wstate->sckeepodd ^ (ycur_int & 1))));
+
+                bool cond;
+                if (flip)
+                    cond = (wstate->span[ycur_int].lx - wstate->span[ycur_int].rx) >= oldhb_diff;
+                else
+                    cond = (wstate->span[ycur_int].rx - wstate->span[ycur_int].lx) >= oldhb_diff;
+
+                if (wstate->span[ycur_int].validline && wstate->fb_size > PIXEL_SIZE_8BIT && cond)
+                    wstate->last_overwriting_scanline = ycur_int;
+
+                // skip line if not assigned to this worker
+                wstate->span[ycur_int].validline &= (!wstate->stride || ycur_int % wstate->stride == wstate->offset);
+            }
         }
+
+        if (ycur_frac == 3) {
+            s += dsde;
+            t += dtde;
+            w += dwde;
+            r += drde;
+            g += dgde;
+            b += dbde;
+            a += dade;
+            z += dzde;
+        }
+
+        xleft += xleft_inc;
+        xright += xright_inc;
     }
 
     switch (wstate->other_modes.cycle_type) {
+        case_no_default;
+
         case CYCLE_TYPE_1:
+            render_spans_1cycle_complete(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
+#if 0
             switch (wstate->other_modes.f.textureuselevel0) {
                 case 0:
                     render_spans_1cycle_complete(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
@@ -2339,8 +2348,11 @@ edgewalker_for_prims(struct rdp_state *wstate, uint32_t *ewdata)
                     render_spans_1cycle_notex(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
                     break;
             }
+#endif
             break;
         case CYCLE_TYPE_2:
+            render_spans_2cycle_complete(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
+#if 0
             switch (wstate->other_modes.f.textureuselevel1) {
                 case 0:
                     render_spans_2cycle_complete(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
@@ -2356,15 +2368,13 @@ edgewalker_for_prims(struct rdp_state *wstate, uint32_t *ewdata)
                     render_spans_2cycle_notex(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
                     break;
             }
+#endif
             break;
         case CYCLE_TYPE_COPY:
             render_spans_copy(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
             break;
         case CYCLE_TYPE_FILL:
             render_spans_fill(wstate, yhlimit >> 2, yllimit >> 2, flip);
-            break;
-        default:
-            msg_error("cycle_type %d", wstate->other_modes.cycle_type);
             break;
     }
 }
