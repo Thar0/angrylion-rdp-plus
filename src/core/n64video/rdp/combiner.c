@@ -150,6 +150,7 @@ color_combiner_equation(int32_t a, int32_t b, int32_t c, int32_t d)
     return (a + 0x80) & 0x1ffff;
 }
 
+// clang-format off
 #define CC_CALC_RGB(wstate, cycle, channel)            \
     color_combiner_equation(                           \
         *(wstate)->combiner_rgbsub_a_##channel[cycle], \
@@ -157,7 +158,9 @@ color_combiner_equation(int32_t a, int32_t b, int32_t c, int32_t d)
         *(wstate)->combiner_rgbmul_##channel[cycle],   \
         *(wstate)->combiner_rgbadd_##channel[cycle]    \
     )
+// clang-format on
 
+// clang-format off
 #define CC_CALC_ALPHA(wstate, cycle)           \
     color_combiner_equation(                   \
         *(wstate)->combiner_alphasub_a[cycle], \
@@ -165,6 +168,7 @@ color_combiner_equation(int32_t a, int32_t b, int32_t c, int32_t d)
         *(wstate)->combiner_alphamul[cycle],   \
         *(wstate)->combiner_alphaadd[cycle]    \
     )
+// clang-format on
 
 static STRICTINLINE int32_t
 chroma_key_calc_1(int32_t c, int32_t width)

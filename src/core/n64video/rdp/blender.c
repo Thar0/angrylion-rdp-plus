@@ -28,6 +28,8 @@ set_blender_input(struct rdp_state *wstate, int cycle, int which, int32_t **inpu
 
     // Select color input, same for p or m
     switch (a & 3) {
+        case_no_default;
+
         case BL_RGB_IN:
             *input_r = &cycle_color->r;
             *input_g = &cycle_color->g;
@@ -48,7 +50,6 @@ set_blender_input(struct rdp_state *wstate, int cycle, int which, int32_t **inpu
             *input_g = &wstate->fog_color.g;
             *input_b = &wstate->fog_color.b;
             break;
-        case_no_default;
     }
 
     // Select alpha input, different for a or b
