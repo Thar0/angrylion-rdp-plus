@@ -204,6 +204,8 @@ struct rdp_state {
     int spans_dbdx;
     int spans_dadx;
     int spans_dzdx;
+
+    // dz value (L^1 norm |dzdx| + |dzdy|)
     uint16_t spans_dzpix;
 
     int spans_drdy;
@@ -518,83 +520,81 @@ deduce_derivatives(struct rdp_state *wstate);
 static void
 deduce_derivatives(struct rdp_state *wstate)
 {
-    int special_bsel0, special_bsel1;
+    bool is_1cycle = wstate->other_modes.cycle_type == CYCLE_TYPE_1;
+    bool is_2cycle = wstate->other_modes.cycle_type == CYCLE_TYPE_2;
 
+    // Checks for whether the blend formula is P * A + M * (1 - A)
     wstate->other_modes.f.partialreject_1cycle =
         (wstate->blender2b_a[0] == &wstate->inv_pixel_color.a && wstate->blender1b_a[0] == &wstate->pixel_color.a);
     wstate->other_modes.f.partialreject_2cycle =
         (wstate->blender2b_a[1] == &wstate->inv_pixel_color.a && wstate->blender1b_a[1] == &wstate->pixel_color.a);
 
-    special_bsel0 = (wstate->blender2b_a[0] == &wstate->memory_color.a);
-    special_bsel1 = (wstate->blender2b_a[1] == &wstate->memory_color.a);
+    bool memcvg_used_c0 = wstate->blender2b_a[0] == &wstate->memory_color.a;
+    bool memcvg_used_c1 = wstate->blender2b_a[1] == &wstate->memory_color.a;
 
-    wstate->other_modes.f.realblendershiftersneeded =
-        (special_bsel0 && wstate->other_modes.cycle_type == CYCLE_TYPE_1) ||
-        (special_bsel1 && wstate->other_modes.cycle_type == CYCLE_TYPE_2);
-    wstate->other_modes.f.interpixelblendershiftersneeded =
-        (special_bsel0 && wstate->other_modes.cycle_type == CYCLE_TYPE_2);
+    // Blender shifters needed if memory coverage is used in the final cycle of either cycle configuration
+    wstate->other_modes.f.realblendershiftersneeded = (memcvg_used_c0 && is_1cycle) || (memcvg_used_c1 && is_2cycle);
+    // Shifters misbehave in first cycle of 2-cycle mode, off-by-1 bug
+    wstate->other_modes.f.interpixelblendershiftersneeded = memcvg_used_c0 && is_2cycle;
 
-    wstate->other_modes.f.rgb_alpha_dither =
-        (wstate->other_modes.rgb_dither_sel << 2) | wstate->other_modes.alpha_dither_sel;
-
+    // Set function for perspective division
     wstate->tcdiv_ptr = tcdiv_func[wstate->other_modes.persp_tex_en];
 
-    int texel1_used_in_cc1 = 0, texel0_used_in_cc1 = 0, texel0_used_in_cc0 = 0, texel1_used_in_cc0 = 0;
-    // int texels_in_cc0 = 0, texels_in_cc1 = 0;
-    int lod_frac_used_in_cc1 = 0, lod_frac_used_in_cc0 = 0;
-    int texels_or_lf_used_in_ac0 = 0, texel0_used_in_ac0 = 0, texel1_used_in_ac0 = 0;
+    // Check for uses of LOD_FRACTION in CC
+    bool lod_frac_used_in_cc0 =
+        (wstate->combiner_rgbmul_r[0] == &wstate->lod_frac) || (wstate->combiner_alphamul[0] == &wstate->lod_frac);
+    bool lod_frac_used_in_cc1 =
+        (wstate->combiner_rgbmul_r[1] == &wstate->lod_frac) || (wstate->combiner_alphamul[1] == &wstate->lod_frac);
 
-    if ((wstate->combiner_rgbmul_r[1] == &wstate->lod_frac) || (wstate->combiner_alphamul[1] == &wstate->lod_frac))
-        lod_frac_used_in_cc1 = 1;
-    if ((wstate->combiner_rgbmul_r[0] == &wstate->lod_frac) || (wstate->combiner_alphamul[0] == &wstate->lod_frac))
-        lod_frac_used_in_cc0 = 1;
+    // Check for uses of TEXEL1 in 1-cycle mode
+    bool texel1_used_in_cc1 = wstate->combiner_rgbmul_r[1] == &wstate->texel1_color.r ||
+                              wstate->combiner_rgbsub_a_r[1] == &wstate->texel1_color.r ||
+                              wstate->combiner_rgbsub_b_r[1] == &wstate->texel1_color.r ||
+                              wstate->combiner_rgbadd_r[1] == &wstate->texel1_color.r ||
+                              wstate->combiner_alphamul[1] == &wstate->texel1_color.a ||
+                              wstate->combiner_alphasub_a[1] == &wstate->texel1_color.a ||
+                              wstate->combiner_alphasub_b[1] == &wstate->texel1_color.a ||
+                              wstate->combiner_alphaadd[1] == &wstate->texel1_color.a ||
+                              wstate->combiner_rgbmul_r[1] == &wstate->texel1_color.a;
 
-    if (wstate->combiner_rgbmul_r[1] == &wstate->texel1_color.r ||
-        wstate->combiner_rgbsub_a_r[1] == &wstate->texel1_color.r ||
-        wstate->combiner_rgbsub_b_r[1] == &wstate->texel1_color.r ||
-        wstate->combiner_rgbadd_r[1] == &wstate->texel1_color.r ||
-        wstate->combiner_alphamul[1] == &wstate->texel1_color.a ||
-        wstate->combiner_alphasub_a[1] == &wstate->texel1_color.a ||
-        wstate->combiner_alphasub_b[1] == &wstate->texel1_color.a ||
-        wstate->combiner_alphaadd[1] == &wstate->texel1_color.a ||
-        wstate->combiner_rgbmul_r[1] == &wstate->texel1_color.a)
-        texel1_used_in_cc1 = 1;
-    if (wstate->combiner_rgbmul_r[1] == &wstate->texel0_color.r ||
-        wstate->combiner_rgbsub_a_r[1] == &wstate->texel0_color.r ||
-        wstate->combiner_rgbsub_b_r[1] == &wstate->texel0_color.r ||
-        wstate->combiner_rgbadd_r[1] == &wstate->texel0_color.r ||
-        wstate->combiner_alphamul[1] == &wstate->texel0_color.a ||
-        wstate->combiner_alphasub_a[1] == &wstate->texel0_color.a ||
-        wstate->combiner_alphasub_b[1] == &wstate->texel0_color.a ||
-        wstate->combiner_alphaadd[1] == &wstate->texel0_color.a ||
-        wstate->combiner_rgbmul_r[1] == &wstate->texel0_color.a)
-        texel0_used_in_cc1 = 1;
-    if (wstate->combiner_alphamul[0] == &wstate->texel1_color.a ||
-        wstate->combiner_alphasub_a[0] == &wstate->texel1_color.a ||
-        wstate->combiner_alphasub_b[0] == &wstate->texel1_color.a ||
-        wstate->combiner_alphaadd[0] == &wstate->texel1_color.a)
-        texel1_used_in_ac0 = 1;
-    if (wstate->combiner_alphamul[0] == &wstate->texel0_color.a ||
-        wstate->combiner_alphasub_a[0] == &wstate->texel0_color.a ||
-        wstate->combiner_alphasub_b[0] == &wstate->texel0_color.a ||
-        wstate->combiner_alphaadd[0] == &wstate->texel0_color.a)
-        texel0_used_in_ac0 = 1;
-    if (wstate->combiner_rgbmul_r[0] == &wstate->texel1_color.r ||
-        wstate->combiner_rgbsub_a_r[0] == &wstate->texel1_color.r ||
-        wstate->combiner_rgbsub_b_r[0] == &wstate->texel1_color.r ||
-        wstate->combiner_rgbadd_r[0] == &wstate->texel1_color.r || texel1_used_in_ac0 ||
-        wstate->combiner_rgbmul_r[0] == &wstate->texel1_color.a)
-        texel1_used_in_cc0 = 1;
-    if (wstate->combiner_rgbmul_r[0] == &wstate->texel0_color.r ||
-        wstate->combiner_rgbsub_a_r[0] == &wstate->texel0_color.r ||
-        wstate->combiner_rgbsub_b_r[0] == &wstate->texel0_color.r ||
-        wstate->combiner_rgbadd_r[0] == &wstate->texel0_color.r || texel0_used_in_ac0 ||
-        wstate->combiner_rgbmul_r[0] == &wstate->texel0_color.a)
-        texel0_used_in_cc0 = 1;
-    texels_or_lf_used_in_ac0 =
-        texel0_used_in_ac0 || texel1_used_in_ac0 || (wstate->combiner_alphamul[0] == &wstate->lod_frac);
-    // texels_in_cc0 = texel0_used_in_cc0 || texel1_used_in_cc0;
-    // texels_in_cc1 = texel0_used_in_cc1 || texel1_used_in_cc1;
+    // Check for uses of TEXEL0 in 1-cycle mode
+    bool texel0_used_in_cc1 = wstate->combiner_rgbmul_r[1] == &wstate->texel0_color.r ||
+                              wstate->combiner_rgbsub_a_r[1] == &wstate->texel0_color.r ||
+                              wstate->combiner_rgbsub_b_r[1] == &wstate->texel0_color.r ||
+                              wstate->combiner_rgbadd_r[1] == &wstate->texel0_color.r ||
+                              wstate->combiner_alphamul[1] == &wstate->texel0_color.a ||
+                              wstate->combiner_alphasub_a[1] == &wstate->texel0_color.a ||
+                              wstate->combiner_alphasub_b[1] == &wstate->texel0_color.a ||
+                              wstate->combiner_alphaadd[1] == &wstate->texel0_color.a ||
+                              wstate->combiner_rgbmul_r[1] == &wstate->texel0_color.a;
+
+    // Check for uses of TEXEL1 in alpha channel in first cycle of 2-cycle mode
+    bool texel1_used_in_ac0 = wstate->combiner_alphamul[0] == &wstate->texel1_color.a ||
+                              wstate->combiner_alphasub_a[0] == &wstate->texel1_color.a ||
+                              wstate->combiner_alphasub_b[0] == &wstate->texel1_color.a ||
+                              wstate->combiner_alphaadd[0] == &wstate->texel1_color.a;
+
+    // Check for uses of TEXEL0 in alpha channel in first cycle of 2-cycle mode
+    bool texel0_used_in_ac0 = wstate->combiner_alphamul[0] == &wstate->texel0_color.a ||
+                              wstate->combiner_alphasub_a[0] == &wstate->texel0_color.a ||
+                              wstate->combiner_alphasub_b[0] == &wstate->texel0_color.a ||
+                              wstate->combiner_alphaadd[0] == &wstate->texel0_color.a;
+
+    // Check for uses of TEXEL0 in any channel in first cycle of 2-cycle mode
+    bool texel1_used_in_cc0 = wstate->combiner_rgbmul_r[0] == &wstate->texel1_color.r ||
+                              wstate->combiner_rgbsub_a_r[0] == &wstate->texel1_color.r ||
+                              wstate->combiner_rgbsub_b_r[0] == &wstate->texel1_color.r ||
+                              wstate->combiner_rgbadd_r[0] == &wstate->texel1_color.r ||
+                              wstate->combiner_rgbmul_r[0] == &wstate->texel1_color.a || texel1_used_in_ac0;
+
+    // Check for uses of TEXEL1 in any channel in first cycle of 2-cycle mode
+    bool texel0_used_in_cc0 = wstate->combiner_rgbmul_r[0] == &wstate->texel0_color.r ||
+                              wstate->combiner_rgbsub_a_r[0] == &wstate->texel0_color.r ||
+                              wstate->combiner_rgbsub_b_r[0] == &wstate->texel0_color.r ||
+                              wstate->combiner_rgbadd_r[0] == &wstate->texel0_color.r ||
+                              wstate->combiner_rgbmul_r[0] == &wstate->texel0_color.a || texel0_used_in_ac0;
+
+    // Determine what texture-related shortcuts can be taken
 
     if (texel1_used_in_cc1)
         wstate->other_modes.f.textureuselevel0 = 0;
@@ -602,6 +602,9 @@ deduce_derivatives(struct rdp_state *wstate)
         wstate->other_modes.f.textureuselevel0 = 1;
     else
         wstate->other_modes.f.textureuselevel0 = 2;
+
+    bool texels_or_lf_used_in_ac0 =
+        texel0_used_in_ac0 || texel1_used_in_ac0 || (wstate->combiner_alphamul[0] == &wstate->lod_frac);
 
     if (texel1_used_in_cc1 || (wstate->other_modes.alpha_compare_en && texels_or_lf_used_in_ac0))
         wstate->other_modes.f.textureuselevel1 = 0;
@@ -612,23 +615,26 @@ deduce_derivatives(struct rdp_state *wstate)
     else
         wstate->other_modes.f.textureuselevel1 = 3;
 
-    int lodfracused = 0;
+    // Determine whether lod is needed
 
-    if ((wstate->other_modes.cycle_type == CYCLE_TYPE_2 && (lod_frac_used_in_cc0 || lod_frac_used_in_cc1)) ||
-        (wstate->other_modes.cycle_type == CYCLE_TYPE_1 && lod_frac_used_in_cc1))
-        lodfracused = 1;
-
-    if ((wstate->other_modes.cycle_type == CYCLE_TYPE_1 && wstate->combiner_rgbsub_a_r[1] == &wstate->noise) ||
-        (wstate->other_modes.cycle_type == CYCLE_TYPE_2 &&
-         (wstate->combiner_rgbsub_a_r[0] == &wstate->noise || wstate->combiner_rgbsub_a_r[1] == &wstate->noise)) ||
-        wstate->other_modes.alpha_dither_sel == 2)
-        wstate->other_modes.f.getditherlevel = DITHER_LEVEL_NOISE;
-    else if (wstate->other_modes.f.rgb_alpha_dither != 0xf)
-        wstate->other_modes.f.getditherlevel = DITHER_LEVEL_USED;
-    else
-        wstate->other_modes.f.getditherlevel = DITHER_LEVEL_UNUSED;
-
+    bool lodfracused =
+        (is_2cycle && (lod_frac_used_in_cc0 || lod_frac_used_in_cc1)) || (is_1cycle && lod_frac_used_in_cc1);
     wstate->other_modes.f.dolod = wstate->other_modes.tex_lod_en || lodfracused;
+
+    // Determine dither level
+
+    bool noise_used_c0 = wstate->combiner_rgbsub_a_r[0] == &wstate->noise;
+    bool noise_used_c1 = wstate->combiner_rgbsub_a_r[1] == &wstate->noise;
+    bool noise_used = (is_1cycle && (noise_used_c1)) || (is_2cycle && (noise_used_c0 || noise_used_c1));
+
+    wstate->other_modes.f.rgb_alpha_dither =
+        (wstate->other_modes.rgb_dither_sel << 2) | wstate->other_modes.alpha_dither_sel;
+    if (noise_used || wstate->other_modes.alpha_dither_sel == 2 /* CD_NOISE */)
+        wstate->other_modes.f.getditherlevel = DITHER_LEVEL_NOISE; // Dither for noise
+    else if (wstate->other_modes.f.rgb_alpha_dither != ((3 /* CD_DISABLE */ << 2) | 3 /* AD_DISABLE */))
+        wstate->other_modes.f.getditherlevel = DITHER_LEVEL_USED; // Dither for other
+    else
+        wstate->other_modes.f.getditherlevel = DITHER_LEVEL_UNUSED; // No dither
 }
 
 void
@@ -730,10 +736,13 @@ rdp_set_other_modes(struct rdp_state *wstate, const uint32_t *args)
     wstate->other_modes.dither_alpha_en = (args[1] >> 1) & 1;
     wstate->other_modes.alpha_compare_en = (args[1] >> 0) & 1;
 
+    // First cycle
     set_blender_input(wstate, 0, 0, &wstate->blender1a_r[0], &wstate->blender1a_g[0], &wstate->blender1a_b[0],
                       &wstate->blender1b_a[0], wstate->other_modes.blend_m1a_0, wstate->other_modes.blend_m1b_0);
     set_blender_input(wstate, 0, 1, &wstate->blender2a_r[0], &wstate->blender2a_g[0], &wstate->blender2a_b[0],
                       &wstate->blender2b_a[0], wstate->other_modes.blend_m2a_0, wstate->other_modes.blend_m2b_0);
+
+    // Second cycle
     set_blender_input(wstate, 1, 0, &wstate->blender1a_r[1], &wstate->blender1a_g[1], &wstate->blender1a_b[1],
                       &wstate->blender1b_a[1], wstate->other_modes.blend_m1a_1, wstate->other_modes.blend_m1b_1);
     set_blender_input(wstate, 1, 1, &wstate->blender2a_r[1], &wstate->blender2a_g[1], &wstate->blender2a_b[1],
