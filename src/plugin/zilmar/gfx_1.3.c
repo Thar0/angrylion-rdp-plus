@@ -153,7 +153,7 @@ static void write_screenshot(char* path)
     fclose(fp);
 }
 
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+EXPORT BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
     UNUSED(lpvReserved);
     switch (fdwReason) {
