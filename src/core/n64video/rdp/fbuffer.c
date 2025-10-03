@@ -37,15 +37,34 @@ fbread2_16(struct rdp_state *wstate, uint32_t num, uint32_t *curpixel_memcvg);
 static void
 fbread2_32(struct rdp_state *wstate, uint32_t num, uint32_t *curpixel_memcvg);
 
-static void (*fbread_func[4])(struct rdp_state *, uint32_t, uint32_t *) = { fbread_4, fbread_8, fbread_16, fbread_32 };
+static void (*fbread_func[4])(struct rdp_state *, uint32_t, uint32_t *) = {
+    fbread_4,
+    fbread_8,
+    fbread_16,
+    fbread_32,
+};
 
-static void (*fbread2_func[4])(struct rdp_state *, uint32_t, uint32_t *) = { fbread2_4, fbread2_8, fbread2_16,
-                                                                             fbread2_32 };
+static void (*fbread2_func[4])(struct rdp_state *, uint32_t, uint32_t *) = {
+    fbread2_4,
+    fbread2_8,
+    fbread2_16,
+    fbread2_32,
+};
 
 static void (*fbwrite_func[4])(struct rdp_state *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
-                               int, int *) = { fbwrite_4, fbwrite_8, fbwrite_16, fbwrite_32 };
+                               int, int *) = {
+    fbwrite_4,
+    fbwrite_8,
+    fbwrite_16,
+    fbwrite_32,
+};
 
-static void (*fbfill_func[4])(struct rdp_state *, uint32_t, int, int *) = { fbfill_4, fbfill_8, fbfill_16, fbfill_32 };
+static void (*fbfill_func[4])(struct rdp_state *, uint32_t, int, int *) = {
+    fbfill_4,
+    fbfill_8,
+    fbfill_16,
+    fbfill_32,
+};
 
 static void
 fbwrite_4(struct rdp_state *wstate, uint32_t curpixel, uint32_t r, uint32_t g, uint32_t b, uint32_t blend_en,
@@ -74,7 +93,9 @@ fbwrite_8(struct rdp_state *wstate, uint32_t curpixel, uint32_t r, uint32_t g, u
     UNUSED(curpixel_memcvg);
 
     uint32_t fb = wstate->fb_address + curpixel;
-    rdram_write_pair8(fb, (fb & 1) ? (g & 0xff) : (r & 0xff), flip, delayedhbwidx);
+    uint8_t finalcolor = (fb & 1) ? g : r;
+
+    rdram_write_pair8(fb, finalcolor, flip, delayedhbwidx);
 }
 
 static void
@@ -83,14 +104,6 @@ fbwrite_16(struct rdp_state *wstate, uint32_t curpixel, uint32_t r, uint32_t g, 
 {
     UNUSED(flip);
     UNUSED(delayedhbwidx);
-
-#undef CVG_DRAW
-#ifdef CVG_DRAW
-    int covdraw = (curpixel_cvg - 1) << 5;
-    r = covdraw;
-    g = covdraw;
-    b = covdraw;
-#endif
 
     uint32_t fb;
     uint16_t rval;
@@ -146,7 +159,7 @@ static void
 fbfill_8(struct rdp_state *wstate, uint32_t curpixel, int flip, int *delayedhbwidx)
 {
     uint32_t fb = wstate->fb_address + curpixel;
-    uint8_t val = (wstate->fill_color >> ((fb & 3) ^ 3) << 3) & 0xff;
+    uint8_t val = wstate->fill_color >> ((fb & 3) ^ 3) << 3;
     rdram_write_pair8(fb, val, flip, delayedhbwidx);
 }
 
@@ -156,14 +169,9 @@ fbfill_16(struct rdp_state *wstate, uint32_t curpixel, int flip, int *delayedhbw
     UNUSED(flip);
     UNUSED(delayedhbwidx);
 
-    uint16_t val;
-    uint8_t hval;
     uint32_t fb = (wstate->fb_address >> 1) + curpixel;
-    if (fb & 1)
-        val = wstate->fill_color & 0xffff;
-    else
-        val = (wstate->fill_color >> 16) & 0xffff;
-    hval = ((val & 1) << 1) | (val & 1);
+    uint16_t val = wstate->fill_color >> (16 - 16 * (fb & 1));
+    uint8_t hval = ((val & 1) << 1) | (val & 1);
     rdram_write_pair16(fb, val, hval, 1);
 }
 
@@ -174,8 +182,10 @@ fbfill_32(struct rdp_state *wstate, uint32_t curpixel, int flip, int *delayedhbw
     UNUSED(delayedhbwidx);
 
     uint32_t fb = (wstate->fb_address >> 2) + curpixel;
-    rdram_write_pair32(fb, wstate->fill_color, (wstate->fill_color & 0x10000) ? 3 : 0,
-                       (wstate->fill_color & 0x1) ? 3 : 0);
+
+    uint8_t h0 = (wstate->fill_color & 0x00010000) ? 3 : 0;
+    uint8_t h1 = (wstate->fill_color & 0x00000001) ? 3 : 0;
+    rdram_write_pair32(fb, wstate->fill_color, h0, h1);
 }
 
 static void
@@ -186,7 +196,7 @@ fbread_4(struct rdp_state *wstate, uint32_t curpixel, uint32_t *curpixel_memcvg)
     wstate->memory_color.r = wstate->memory_color.g = wstate->memory_color.b = 0;
 
     *curpixel_memcvg = 7;
-    wstate->memory_color.a = 0xe0;
+    wstate->memory_color.a = 0b11100000;
 }
 
 static void
@@ -195,7 +205,7 @@ fbread2_4(struct rdp_state *wstate, uint32_t curpixel, uint32_t *curpixel_memcvg
     UNUSED(curpixel);
 
     wstate->pre_memory_color.r = wstate->pre_memory_color.g = wstate->pre_memory_color.b = 0;
-    wstate->pre_memory_color.a = 0xe0;
+    wstate->pre_memory_color.a = 0b11100000;
     *curpixel_memcvg = 7;
 }
 
@@ -210,7 +220,7 @@ fbread_8(struct rdp_state *wstate, uint32_t curpixel, uint32_t *curpixel_memcvg)
     }
 
     *curpixel_memcvg = 7;
-    wstate->memory_color.a = 0xe0;
+    wstate->memory_color.a = 0b11100000;
 }
 
 static void
@@ -222,7 +232,7 @@ fbread2_8(struct rdp_state *wstate, uint32_t curpixel, uint32_t *curpixel_memcvg
         RREADADDR8(mem, addr);
         wstate->pre_memory_color.r = wstate->pre_memory_color.g = wstate->pre_memory_color.b = mem;
     }
-    wstate->pre_memory_color.a = 0xe0;
+    wstate->pre_memory_color.a = 0b11100000;
     *curpixel_memcvg = 7;
 }
 
@@ -252,7 +262,7 @@ fbread_16(struct rdp_state *wstate, uint32_t curpixel, uint32_t *curpixel_memcvg
         wstate->memory_color.a = lowbits << 5;
     } else {
         *curpixel_memcvg = 7;
-        wstate->memory_color.a = 0xe0;
+        wstate->memory_color.a = 0b11100000;
     }
 }
 
@@ -283,7 +293,7 @@ fbread2_16(struct rdp_state *wstate, uint32_t curpixel, uint32_t *curpixel_memcv
         wstate->pre_memory_color.a = lowbits << 5;
     } else {
         *curpixel_memcvg = 7;
-        wstate->pre_memory_color.a = 0xe0;
+        wstate->pre_memory_color.a = 0b11100000;
     }
 }
 
@@ -298,10 +308,10 @@ fbread_32(struct rdp_state *wstate, uint32_t curpixel, uint32_t *curpixel_memcvg
         wstate->memory_color.b = RGBA32_B(mem);
 
         *curpixel_memcvg = (mem >> 5) & 7;
-        wstate->memory_color.a = mem & 0xe0;
+        wstate->memory_color.a = mem & 0b11100000;
     } else {
         *curpixel_memcvg = 7;
-        wstate->memory_color.a = 0xe0;
+        wstate->memory_color.a = 0b11100000;
     }
 }
 
@@ -317,10 +327,10 @@ fbread2_32(struct rdp_state *wstate, uint32_t curpixel, uint32_t *curpixel_memcv
         wstate->pre_memory_color.b = RGBA32_B(mem);
 
         *curpixel_memcvg = (mem >> 5) & 7;
-        wstate->pre_memory_color.a = mem & 0xe0;
+        wstate->pre_memory_color.a = mem & 0b11100000;
     } else {
         *curpixel_memcvg = 7;
-        wstate->pre_memory_color.a = 0xe0;
+        wstate->pre_memory_color.a = 0b11100000;
     }
 }
 
