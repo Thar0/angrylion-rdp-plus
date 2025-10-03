@@ -545,7 +545,7 @@ loading_pipeline(struct rdp_state *wstate, int ystart, int yend, int tilenum, in
                     break;
             }
 
-            // clang-format off
+                // clang-format off
             #define tmem_write16(adr, val) { tmem16[(adr) ^ WORD_ADDR_XOR] = (uint16_t)(val); }(void)0
             // clang-format on
 

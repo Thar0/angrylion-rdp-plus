@@ -6,9 +6,9 @@
 
 static uint8_t replicated_rgba[32];
 
-#define GET_LOW_RGBA16_TMEM(x) (replicated_rgba[((x) >> 1) & 0x1f])
-#define GET_MED_RGBA16_TMEM(x) (replicated_rgba[((x) >> 6) & 0x1f])
-#define GET_HI_RGBA16_TMEM(x)  (replicated_rgba[(x) >> 11])
+#define RGBA16_EXTEND_R(x) (replicated_rgba[((x) >> 11)])
+#define RGBA16_EXTEND_G(x) (replicated_rgba[((x) >> 6) & 0x1f])
+#define RGBA16_EXTEND_B(x) (replicated_rgba[((x) >> 1) & 0x1f])
 
 static void
 sort_tmem_idx(uint32_t *idx, uint32_t idxa, uint32_t idxb, uint32_t idxc, uint32_t idxd, uint32_t bankno)
@@ -21,7 +21,7 @@ sort_tmem_idx(uint32_t *idx, uint32_t idxa, uint32_t idxb, uint32_t idxc, uint32
         *idx = idxc & 0x3ff;
     else if ((idxd & 3) == bankno)
         *idx = idxd & 0x3ff;
-    else
+    else // TODO should be unreachable?
         *idx = 0;
 }
 
@@ -64,324 +64,204 @@ compute_color_index(struct rdp_state *wstate, uint32_t *cidx, uint32_t readshort
 static INLINE void
 fetch_texel(struct rdp_state *wstate, struct color *color, int s, int t, uint32_t tilenum)
 {
+    // Determine address
+    int tsize = wstate->tile[tilenum].size;
+    int tformat = wstate->tile[tilenum].format;
+
+    // Compute tmem base address for the line
     uint32_t tbase = wstate->tile[tilenum].line * (t & 0xff) + wstate->tile[tilenum].tmem;
 
-    uint32_t tpal = wstate->tile[tilenum].palette;
+    // Compute tmem address for the exact sample
+    uint32_t taddr;
+    if (tformat == FORMAT_YUV || tsize == PIXEL_SIZE_8BIT)
+        // yuv access is done using both 16-bit (u,v pair) and 8-bit (y) so it's treated like 8-bit here and a 16-bit
+        // variant is below
+        taddr = (tbase << 3) + s;
+    else if (tsize == PIXEL_SIZE_4BIT)
+        // lshift by 4 to get 4-bit granularity for s coordinate, then rshift by 1 to resolve the byte address
+        taddr = ((tbase << 4) + s) >> 1;
+    else /* (PIXEL_SIZE_16BIT || PIXEL_SIZE_32BIT) && !FORMAT_YUV */
+        // uses tc16, so << 3 becomes >> 2
+        taddr = (tbase << 2) + s;
 
-    uint32_t taddr = 0;
+    // for YUV only, 16-bit samples for (u,v)
+    uint32_t taddrlow;
+    taddrlow = taddr >> 1;
+
+    // XORs for endianness
+
+    uint32_t taddr_xor_b = ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
+    uint32_t taddr_xor_w = taddr_xor_b >> 1;
+
+    if (tformat == FORMAT_YUV || tsize == PIXEL_SIZE_4BIT || tsize == PIXEL_SIZE_8BIT)
+        taddr ^= taddr_xor_b; // 8-bit samples
+    else                      /* PIXEL_SIZE_16BIT || PIXEL_SIZE_32BIT */
+        taddr ^= taddr_xor_w; // 16-bit samples
+
+    taddrlow ^= taddr_xor_w;
+
+    // TMEM access, up to 2x 16 bits
+
+    uint16_t c1, c2;
 
     switch (wstate->tile[tilenum].f.notlutswitch) {
-        case TEXEL_RGBA4:
-            {
-                taddr = ((tbase << 4) + s) >> 1;
-                taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
-                uint8_t byteval, c;
+        case_no_default;
 
-                byteval = wstate->tmem[taddr & 0xfff];
-                c = ((s & 1)) ? (byteval & 0xf) : (byteval >> 4);
-                c |= (c << 4);
-                color->r = c;
-                color->g = c;
-                color->b = c;
-                color->a = c;
-            }
-            break;
-        case TEXEL_RGBA8:
-            {
-                taddr = (tbase << 3) + s;
-                taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
+            /* 4-bit */
 
-                uint8_t p;
-
-                p = wstate->tmem[taddr & 0xfff];
-                color->r = p;
-                color->g = p;
-                color->b = p;
-                color->a = p;
-            }
-            break;
-        case TEXEL_RGBA16:
-            {
-                taddr = (tbase << 2) + s;
-                taddr ^= ((t & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR);
-
-                uint16_t c;
-
-                c = tc16[taddr & 0x7ff];
-                color->r = GET_HI_RGBA16_TMEM(c);
-                color->g = GET_MED_RGBA16_TMEM(c);
-                color->b = GET_LOW_RGBA16_TMEM(c);
-                color->a = (c & 1) ? 0xff : 0;
-            }
-            break;
-        case TEXEL_RGBA32:
-            {
-
-                taddr = (tbase << 2) + s;
-                taddr ^= ((t & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR);
-
-                uint16_t c;
-
-                taddr &= 0x3ff;
-                c = tc16[taddr];
-                color->r = c >> 8;
-                color->g = c & 0xff;
-                c = tc16[taddr | 0x400];
-                color->b = c >> 8;
-                color->a = c & 0xff;
-            }
-            break;
-        case TEXEL_YUV4:
-            {
-                taddr = (tbase << 3) + s;
-
-                taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
-
-                int32_t u, save;
-
-                save = wstate->tmem[taddr & 0x7ff];
-
-                save &= 0xf0;
-                save |= (save >> 4);
-
-                u = save - 0x80;
-
-                color->r = u;
-                color->g = u;
-                color->b = save;
-                color->a = save;
-            }
-            break;
-        case TEXEL_YUV8:
-            {
-                taddr = (tbase << 3) + s;
-
-                taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
-
-                int32_t u, save;
-
-                save = u = wstate->tmem[taddr & 0x7ff];
-
-                u = u - 0x80;
-
-                color->r = u;
-                color->g = u;
-                color->b = save;
-                color->a = save;
-            }
-            break;
-        case TEXEL_YUV16:
-            {
-                taddr = (tbase << 3) + s;
-                int taddrlow = taddr >> 1;
-
-                taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
-                taddrlow ^= ((t & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR);
-
-                taddr &= 0x7ff;
-                taddrlow &= 0x3ff;
-
-                uint16_t c = tc16[taddrlow];
-
-                int32_t y, u, v;
-                y = wstate->tmem[taddr | 0x800];
-                u = c >> 8;
-                v = c & 0xff;
-
-                u = u - 0x80;
-                v = v - 0x80;
-
-                color->r = u;
-                color->g = v;
-                color->b = y;
-                color->a = y;
-            }
-            break;
-        case TEXEL_YUV32:
-            {
-                int taddrlow;
-                uint16_t c;
-                int32_t y, u, v;
-
-                taddr = (tbase << 3) + s;
-                taddrlow = taddr >> 1;
-
-                taddrlow ^= ((t & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR);
-
-                taddrlow &= 0x3ff;
-
-                c = tc16[taddrlow];
-
-                u = c >> 8;
-                v = c & 0xff;
-
-                u = u - 0x80;
-                v = v - 0x80;
-
-                color->r = u;
-                color->g = v;
-
-                if (s & 1) {
-                    taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
-                    taddr &= 0x7ff;
-                    y = wstate->tmem[taddr | 0x800];
-
-                    color->b = y;
-                    color->a = y;
-                } else {
-                    y = tc16[taddrlow | 0x400];
-
-                    color->b = y >> 8;
-                    color->a = ((y >> 8) & 0xf) | (y & 0xf0);
-                }
-            }
-            break;
         case TEXEL_CI4:
-            {
-                taddr = ((tbase << 4) + s) >> 1;
-                taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
-
-                uint8_t p;
-
-                p = wstate->tmem[taddr & 0xfff];
-                p = (s & 1) ? (p & 0xf) : (p >> 4);
-                p = (uint8_t)(tpal << 4) | p;
-                color->r = color->g = color->b = color->a = p;
-            }
+        case TEXEL_RGBA4:
+        case TEXEL_I4:
+        case TEXEL_IA4:
+            c1 = wstate->tmem[taddr & 0xfff];
+            c1 = (s & 1) ? (c1 & 0xf) : (c1 >> 4);
             break;
+
+            /* 8-bit */
+
+        case TEXEL_I8:
         case TEXEL_CI8:
-            {
-                taddr = (tbase << 3) + s;
-                taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
-
-                uint8_t p;
-
-                p = wstate->tmem[taddr & 0xfff];
-                color->r = p;
-                color->g = p;
-                color->b = p;
-                color->a = p;
-            }
+        case TEXEL_RGBA8:
+        case TEXEL_IA8:
+            c1 = wstate->tmem[taddr & 0xfff];
             break;
+
+            /* 16-bit and 32-bit */
+
+        case TEXEL_RGBA32:
+            c1 = tc16[(0x000 >> 1) | (taddr & 0x3ff)];
+            c2 = tc16[(0x800 >> 1) | (taddr & 0x3ff)];
+            break;
+
+        case TEXEL_IA16:
+        case TEXEL_RGBA16:
         case TEXEL_CI16:
         case TEXEL_CI32:
-            {
-                taddr = (tbase << 2) + s;
-                taddr ^= ((t & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR);
-
-                uint16_t c;
-
-                c = tc16[taddr & 0x7ff];
-                color->r = c >> 8;
-                color->g = c & 0xff;
-                color->b = color->r;
-                color->a = color->g;
-            }
-            break;
-        case TEXEL_IA4:
-            {
-                taddr = ((tbase << 4) + s) >> 1;
-                taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
-
-                uint8_t p, i;
-
-                p = wstate->tmem[taddr & 0xfff];
-                p = (s & 1) ? (p & 0xf) : (p >> 4);
-                i = p & 0xe;
-                i = (i << 4) | (i << 1) | (i >> 2);
-                color->r = i;
-                color->g = i;
-                color->b = i;
-                color->a = (p & 0x1) ? 0xff : 0;
-            }
-            break;
-        case TEXEL_IA8:
-            {
-                taddr = (tbase << 3) + s;
-                taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
-
-                uint8_t p, i;
-
-                p = wstate->tmem[taddr & 0xfff];
-                i = p & 0xf0;
-                i |= (i >> 4);
-                color->r = i;
-                color->g = i;
-                color->b = i;
-                color->a = ((p & 0xf) << 4) | (p & 0xf);
-            }
-            break;
-        case TEXEL_IA16:
-            {
-
-                taddr = (tbase << 2) + s;
-                taddr ^= ((t & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR);
-
-                uint16_t c;
-
-                c = tc16[taddr & 0x7ff];
-                color->r = color->g = color->b = (c >> 8);
-                color->a = c & 0xff;
-            }
-            break;
-        case TEXEL_IA32:
-            {
-                taddr = (tbase << 2) + s;
-                taddr ^= ((t & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR);
-
-                uint16_t c;
-
-                c = tc16[taddr & 0x7ff];
-                color->r = c >> 8;
-                color->g = c & 0xff;
-                color->b = color->r;
-                color->a = color->g;
-            }
-            break;
-        case TEXEL_I4:
-            {
-                taddr = ((tbase << 4) + s) >> 1;
-                taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
-
-                uint8_t byteval, c;
-
-                byteval = wstate->tmem[taddr & 0xfff];
-                c = (s & 1) ? (byteval & 0xf) : (byteval >> 4);
-                c |= (c << 4);
-                color->r = c;
-                color->g = c;
-                color->b = c;
-                color->a = c;
-            }
-            break;
-        case TEXEL_I8:
-            {
-                taddr = (tbase << 3) + s;
-                taddr ^= ((t & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR);
-
-                uint8_t c;
-
-                c = wstate->tmem[taddr & 0xfff];
-                color->r = c;
-                color->g = c;
-                color->b = c;
-                color->a = c;
-            }
-            break;
         case TEXEL_I16:
         case TEXEL_I32:
-        default:
+        case TEXEL_IA32:
+            c1 = c2 = tc16[taddr & 0x7ff];
+            break;
+
+            /* YUV formats */
+
+        case TEXEL_YUV4:
+        case TEXEL_YUV8:
+            c1 = wstate->tmem[taddr & 0x7ff];
+            break;
+        case TEXEL_YUV16:
+            c1 = tc16[taddrlow & 0x3ff];                // u,v
+            c2 = wstate->tmem[(taddr & 0x7ff) | 0x800]; // y
+            break;
+        case TEXEL_YUV32:
+            c1 = tc16[taddrlow & 0x3ff];                                                                    // u,v
+            c2 = (s & 1) ? wstate->tmem[(taddr & 0x7ff) | 0x800] : tc16[(taddrlow & 0x3ff) | (0x800 >> 1)]; // yy
+            break;
+    }
+
+    // Formatting
+
+    switch (wstate->tile[tilenum].f.notlutswitch) {
+        case_no_default;
+
+            /* 4-bit formats (excluding YUV) */
+
+        case TEXEL_RGBA4:
+        case TEXEL_I4:
+            color->r = color->g = color->b = color->a = (c1 << 4) | c1;
+            break;
+
+        case TEXEL_CI4:
+            // Like I4 but rather than replicating pixels it stuffs the palette number into the upper 4 bits
+            color->r = color->g = color->b = color->a = (wstate->tile[tilenum].palette << 4) | c1;
+            break;
+
+        case TEXEL_IA4:
             {
-                taddr = (tbase << 2) + s;
-                taddr ^= ((t & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR);
+                uint8_t i = c1 & 0b1110;
+                uint8_t a = c1 & 1;
+                color->r = color->g = color->b = (i << 4) | (i << 1) | (i >> 2);
+                color->a = a * 255;
+            }
+            break;
 
-                uint16_t c;
+            /* 8-bit formats (excluding YUV) */
 
-                c = tc16[taddr & 0x7ff];
-                color->r = c >> 8;
-                color->g = c & 0xff;
-                color->b = color->r;
-                color->a = color->g;
+        case TEXEL_I8:
+        case TEXEL_CI8:
+        case TEXEL_RGBA8:
+            color->r = color->g = color->b = color->a = c1;
+            break;
+
+        case TEXEL_IA8:
+            {
+                uint8_t i = c1 & 0xf0;
+                uint8_t a = c1 & 0x0f;
+                color->r = color->g = color->b = i | (i >> 4);
+                color->a = (a << 4) | a;
+            }
+            break;
+
+            /* 16 and 32 bit formats (excluding YUV) */
+
+        case TEXEL_RGBA16:
+            color->r = RGBA16_EXTEND_R(c1);
+            color->g = RGBA16_EXTEND_G(c1);
+            color->b = RGBA16_EXTEND_B(c1);
+            color->a = (c1 & 1) * 255;
+            break;
+
+        case TEXEL_IA16:
+            color->r = color->g = color->b = c1 >> 8;
+            color->a = c1 & 0xff;
+            break;
+
+        case TEXEL_CI16:
+        case TEXEL_CI32:
+        case TEXEL_I16:
+        case TEXEL_I32:
+        case TEXEL_IA32:
+        case TEXEL_RGBA32:
+            // For all but rgba32, c1 = c2 = low tmem sample
+            // For rgba32, c1 is low tmem and c2 is high tmem
+            color->r = c1 >> 8;
+            color->g = c1 & 0xff;
+            color->b = c2 >> 8;
+            color->a = c2 & 0xff;
+            break;
+
+            /* YUV formats */
+
+        case TEXEL_YUV4:
+            // expand to 8-bit value (taking upper nibble) then just 8-bit YUV behavior
+            c1 &= 0xf0; // u,v
+            c1 = c1 | (c1 >> 4);
+            FALLTHROUGH;
+        case TEXEL_YUV8:
+            color->r = color->g = c1 - 0x80; // u,v
+            color->b = color->a = c1;        // u,v
+            break;
+
+        case TEXEL_YUV16:
+        case TEXEL_YUV32:
+            {
+                int32_t y = c2;        // yy or y
+                int32_t u = c1 >> 8;   // u
+                int32_t v = c1 & 0xff; // v
+
+                color->r = u - 0x80;
+                color->g = v - 0x80;
+
+                if (tsize == PIXEL_SIZE_16BIT || (s & 1)) {
+                    // lower 8 bits of yy, for the 16-bit format the upper 8 bits are meaningless anyway
+                    color->b = color->a = y;
+                } else {
+                    color->b = y >> 8; // upper 8 bits of yy
+                    // some insane stuff here
+                    // _F__ -> ___F     lower nibble of upper 8 bits becomes lower nibble
+                    // __F_ -> __F_     upper nibble of lower 8 bits becomes upper nibble
+                    color->a = ((y >> 8) & 0xf) | (y & 0xf0);
+                }
             }
             break;
     }
@@ -391,1445 +271,587 @@ static INLINE void
 fetch_texel_quadro(struct rdp_state *wstate, struct color *color0, struct color *color1, struct color *color2,
                    struct color *color3, int s0, int sdiff, int t0, int tdiff, uint32_t tilenum, int unequaluppers)
 {
-
     uint32_t tbase0 = wstate->tile[tilenum].line * (t0 & 0xff) + wstate->tile[tilenum].tmem;
-
     int t1 = (t0 & 0xff) + tdiff;
-
     int s1 = s0 + sdiff;
-
     uint32_t tbase2 = wstate->tile[tilenum].line * t1 + wstate->tile[tilenum].tmem;
-    uint32_t tpal = wstate->tile[tilenum].palette;
-    uint32_t xort, ands;
 
-    uint32_t taddr0, taddr1, taddr2, taddr3;
-    uint32_t taddrlow0, taddrlow1, taddrlow2, taddrlow3;
+    int tsize = wstate->tile[tilenum].size;
+    int tformat = wstate->tile[tilenum].format;
+
+    struct color *colors[] = {
+        color0,
+        color1,
+        color2,
+        color3,
+    };
+    uint32_t taddrs[4];
+
+    if (tformat == FORMAT_YUV && (tsize == PIXEL_SIZE_4BIT || tsize == PIXEL_SIZE_8BIT)) {
+        taddrs[0] = (tbase0 << 3) + s0;
+        taddrs[1] = (tbase0 << 3) + s1 + sdiff;
+        taddrs[2] = (tbase2 << 3) + s0;
+        taddrs[3] = (tbase2 << 3) + s1 + sdiff;
+    } else if (tsize == PIXEL_SIZE_8BIT) {
+        taddrs[0] = (tbase0 << 3) + s0;
+        taddrs[1] = (tbase0 << 3) + s1;
+        taddrs[2] = (tbase2 << 3) + s0;
+        taddrs[3] = (tbase2 << 3) + s1;
+    } else if (tsize == PIXEL_SIZE_4BIT) {
+        taddrs[0] = ((tbase0 << 4) + s0) >> 1;
+        taddrs[1] = ((tbase0 << 4) + s1) >> 1;
+        taddrs[2] = ((tbase2 << 4) + s0) >> 1;
+        taddrs[3] = ((tbase2 << 4) + s1) >> 1;
+    } else { /* 16B / 32B */
+        taddrs[0] = (tbase0 << 2) + s0;
+        taddrs[1] = (tbase0 << 2) + s1;
+        taddrs[2] = (tbase2 << 2) + s0;
+        taddrs[3] = (tbase2 << 2) + s1;
+    }
+
+    uint32_t taddrs_low[4] = {
+        (taddrs[0] + 0) >> 1,
+        (taddrs[1] + sdiff) >> 1,
+        (taddrs[2] + 0) >> 1,
+        (taddrs[3] + sdiff) >> 1,
+    };
+
+    // XORs for endianness
+
+    uint32_t taddr_xor_b_L = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
+    uint32_t taddr_xor_b_H = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
+    uint32_t taddr_xor_w_L = taddr_xor_b_L >> 1;
+    uint32_t taddr_xor_w_H = taddr_xor_b_H >> 1;
+
+    if (tformat == FORMAT_YUV || tsize == PIXEL_SIZE_4BIT || tsize == PIXEL_SIZE_8BIT) {
+        taddrs[0] ^= taddr_xor_b_L;
+        taddrs[1] ^= taddr_xor_b_L;
+        taddrs[2] ^= taddr_xor_b_H;
+        taddrs[3] ^= taddr_xor_b_H;
+    } else { /* TEXEL_SIZ_16b || TEXEL_SIZ_32b */
+        taddrs[0] ^= taddr_xor_w_L;
+        taddrs[1] ^= taddr_xor_w_L;
+        taddrs[2] ^= taddr_xor_w_H;
+        taddrs[3] ^= taddr_xor_w_H;
+    }
+
+    taddrs_low[0] ^= taddr_xor_w_L;
+    taddrs_low[1] ^= taddr_xor_w_L;
+    taddrs_low[2] ^= taddr_xor_w_H;
+    taddrs_low[3] ^= taddr_xor_w_H;
+
+    // TMEM access
+
+    uint16_t c1[4];
+    uint16_t c2[4];
 
     switch (wstate->tile[tilenum].f.notlutswitch) {
+        case_no_default;
+
+        case TEXEL_CI4:
         case TEXEL_RGBA4:
-            {
-                taddr0 = ((tbase0 << 4) + s0) >> 1;
-                taddr1 = ((tbase0 << 4) + s1) >> 1;
-                taddr2 = ((tbase2 << 4) + s0) >> 1;
-                taddr3 = ((tbase2 << 4) + s1) >> 1;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                uint32_t byteval, c;
-
-                taddr0 &= 0xfff;
-                taddr1 &= 0xfff;
-                taddr2 &= 0xfff;
-                taddr3 &= 0xfff;
-                ands = s0 & 1;
-                byteval = wstate->tmem[taddr0];
-                c = (ands) ? (byteval & 0xf) : (byteval >> 4);
-                c |= (c << 4);
-                color0->r = c;
-                color0->g = c;
-                color0->b = c;
-                color0->a = c;
-                byteval = wstate->tmem[taddr2];
-                c = (ands) ? (byteval & 0xf) : (byteval >> 4);
-                c |= (c << 4);
-                color2->r = c;
-                color2->g = c;
-                color2->b = c;
-                color2->a = c;
-
-                ands = s1 & 1;
-                byteval = wstate->tmem[taddr1];
-                c = (ands) ? (byteval & 0xf) : (byteval >> 4);
-                c |= (c << 4);
-                color1->r = c;
-                color1->g = c;
-                color1->b = c;
-                color1->a = c;
-                byteval = wstate->tmem[taddr3];
-                c = (ands) ? (byteval & 0xf) : (byteval >> 4);
-                c |= (c << 4);
-                color3->r = c;
-                color3->g = c;
-                color3->b = c;
-                color3->a = c;
+        case TEXEL_I4:
+        case TEXEL_IA4:
+            for (int k = 0; k < 4; k++) {
+                uint16_t c = wstate->tmem[taddrs[k] & 0xfff];
+                int sel = (k & 1) ? (s1 & 1) : (s0 & 1);
+                c1[k] = sel ? (c & 0xf) : (c >> 4);
             }
             break;
+
         case TEXEL_RGBA8:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                uint32_t p;
-
-                taddr0 &= 0xfff;
-                taddr1 &= 0xfff;
-                taddr2 &= 0xfff;
-                taddr3 &= 0xfff;
-                p = wstate->tmem[taddr0];
-                color0->r = p;
-                color0->g = p;
-                color0->b = p;
-                color0->a = p;
-                p = wstate->tmem[taddr2];
-                color2->r = p;
-                color2->g = p;
-                color2->b = p;
-                color2->a = p;
-                p = wstate->tmem[taddr1];
-                color1->r = p;
-                color1->g = p;
-                color1->b = p;
-                color1->a = p;
-                p = wstate->tmem[taddr3];
-                color3->r = p;
-                color3->g = p;
-                color3->b = p;
-                color3->a = p;
+        case TEXEL_I8:
+        case TEXEL_CI8:
+        case TEXEL_IA8:
+            for (int k = 0; k < 4; k++) {
+                c1[k] = wstate->tmem[taddrs[k] & 0xfff];
             }
             break;
-        case TEXEL_RGBA16:
-            {
-                taddr0 = (tbase0 << 2) + s0;
-                taddr1 = (tbase0 << 2) + s1;
-                taddr2 = (tbase2 << 2) + s0;
-                taddr3 = (tbase2 << 2) + s1;
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
 
-                uint32_t c0, c1, c2, c3;
-
-                taddr0 &= 0x7ff;
-                taddr1 &= 0x7ff;
-                taddr2 &= 0x7ff;
-                taddr3 &= 0x7ff;
-                c0 = tc16[taddr0];
-                c1 = tc16[taddr1];
-                c2 = tc16[taddr2];
-                c3 = tc16[taddr3];
-                color0->r = GET_HI_RGBA16_TMEM(c0);
-                color0->g = GET_MED_RGBA16_TMEM(c0);
-                color0->b = GET_LOW_RGBA16_TMEM(c0);
-                color0->a = (c0 & 1) ? 0xff : 0;
-                color1->r = GET_HI_RGBA16_TMEM(c1);
-                color1->g = GET_MED_RGBA16_TMEM(c1);
-                color1->b = GET_LOW_RGBA16_TMEM(c1);
-                color1->a = (c1 & 1) ? 0xff : 0;
-                color2->r = GET_HI_RGBA16_TMEM(c2);
-                color2->g = GET_MED_RGBA16_TMEM(c2);
-                color2->b = GET_LOW_RGBA16_TMEM(c2);
-                color2->a = (c2 & 1) ? 0xff : 0;
-                color3->r = GET_HI_RGBA16_TMEM(c3);
-                color3->g = GET_MED_RGBA16_TMEM(c3);
-                color3->b = GET_LOW_RGBA16_TMEM(c3);
-                color3->a = (c3 & 1) ? 0xff : 0;
-            }
-            break;
         case TEXEL_RGBA32:
-            {
-                taddr0 = (tbase0 << 2) + s0;
-                taddr1 = (tbase0 << 2) + s1;
-                taddr2 = (tbase2 << 2) + s0;
-                taddr3 = (tbase2 << 2) + s1;
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                uint16_t c0, c1, c2, c3;
-
-                taddr0 &= 0x3ff;
-                taddr1 &= 0x3ff;
-                taddr2 &= 0x3ff;
-                taddr3 &= 0x3ff;
-                c0 = tc16[taddr0];
-                color0->r = c0 >> 8;
-                color0->g = c0 & 0xff;
-                c0 = tc16[taddr0 | 0x400];
-                color0->b = c0 >> 8;
-                color0->a = c0 & 0xff;
-                c1 = tc16[taddr1];
-                color1->r = c1 >> 8;
-                color1->g = c1 & 0xff;
-                c1 = tc16[taddr1 | 0x400];
-                color1->b = c1 >> 8;
-                color1->a = c1 & 0xff;
-                c2 = tc16[taddr2];
-                color2->r = c2 >> 8;
-                color2->g = c2 & 0xff;
-                c2 = tc16[taddr2 | 0x400];
-                color2->b = c2 >> 8;
-                color2->a = c2 & 0xff;
-                c3 = tc16[taddr3];
-                color3->r = c3 >> 8;
-                color3->g = c3 & 0xff;
-                c3 = tc16[taddr3 | 0x400];
-                color3->b = c3 >> 8;
-                color3->a = c3 & 0xff;
+            for (int k = 0; k < 4; k++) {
+                c1[k] = tc16[(taddrs[k] & 0x3ff) | (0x000 >> 1)];
+                c2[k] = tc16[(taddrs[k] & 0x3ff) | (0x800 >> 1)];
             }
             break;
+
+        case TEXEL_IA16:
+        case TEXEL_RGBA16:
+        case TEXEL_CI16:
+        case TEXEL_CI32:
+        case TEXEL_I16:
+        case TEXEL_I32:
+        case TEXEL_IA32:
+            for (int k = 0; k < 4; k++) {
+                c1[k] = c2[k] = tc16[taddrs[k] & 0x7ff];
+            }
+            break;
+
         case TEXEL_YUV4:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1 + sdiff;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1 + sdiff;
-
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                int32_t u0, u1, u2, u3, save0, save1, save2, save3;
-
-                save0 = wstate->tmem[taddr0 & 0x7ff];
-                save0 &= 0xf0;
-                save0 |= (save0 >> 4);
-                u0 = save0 - 0x80;
-
-                save1 = wstate->tmem[taddr1 & 0x7ff];
-                save1 &= 0xf0;
-                save1 |= (save1 >> 4);
-                u1 = save1 - 0x80;
-
-                save2 = wstate->tmem[taddr2 & 0x7ff];
-                save2 &= 0xf0;
-                save2 |= (save2 >> 4);
-                u2 = save2 - 0x80;
-
-                save3 = wstate->tmem[taddr3 & 0x7ff];
-                save3 &= 0xf0;
-                save3 |= (save3 >> 4);
-                u3 = save3 - 0x80;
-
-                color0->r = u0;
-                color0->g = u0;
-                color1->r = u1;
-                color1->g = u1;
-                color2->r = u2;
-                color2->g = u2;
-                color3->r = u3;
-                color3->g = u3;
-
-                if (unequaluppers) {
-                    color0->b = color0->a = save3;
-                    color1->b = color1->a = save2;
-                    color2->b = color2->a = save1;
-                    color3->b = color3->a = save0;
-                } else {
-                    color0->b = color0->a = save0;
-                    color1->b = color1->a = save1;
-                    color2->b = color2->a = save2;
-                    color3->b = color3->a = save3;
-                }
-            }
-            break;
         case TEXEL_YUV8:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1 + sdiff;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1 + sdiff;
-
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                int32_t u0, u1, u2, u3, save0, save1, save2, save3;
-
-                save0 = u0 = wstate->tmem[taddr0 & 0x7ff];
-                u0 = u0 - 0x80;
-                save1 = u1 = wstate->tmem[taddr1 & 0x7ff];
-                u1 = u1 - 0x80;
-                save2 = u2 = wstate->tmem[taddr2 & 0x7ff];
-                u2 = u2 - 0x80;
-                save3 = u3 = wstate->tmem[taddr3 & 0x7ff];
-                u3 = u3 - 0x80;
-
-                color0->r = u0;
-                color0->g = u0;
-                color1->r = u1;
-                color1->g = u1;
-                color2->r = u2;
-                color2->g = u2;
-                color3->r = u3;
-                color3->g = u3;
-
-                if (unequaluppers) {
-                    color0->b = color0->a = save3;
-                    color1->b = color1->a = save2;
-                    color2->b = color2->a = save1;
-                    color3->b = color3->a = save0;
-                } else {
-                    color0->b = color0->a = save0;
-                    color1->b = color1->a = save1;
-                    color2->b = color2->a = save2;
-                    color3->b = color3->a = save3;
-                }
+            for (int k = 0; k < 4; k++) {
+                c1[k] = wstate->tmem[taddrs[k] & 0x7ff];
             }
             break;
         case TEXEL_YUV16:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1;
-
-                taddrlow0 = (taddr0) >> 1;
-                taddrlow1 = (taddr1 + sdiff) >> 1;
-                taddrlow2 = (taddr2) >> 1;
-                taddrlow3 = (taddr3 + sdiff) >> 1;
-
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddrlow0 ^= xort;
-                taddrlow1 ^= xort;
-                xort = (t1 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddrlow2 ^= xort;
-                taddrlow3 ^= xort;
-
-                taddr0 &= 0x7ff;
-                taddr1 &= 0x7ff;
-                taddr2 &= 0x7ff;
-                taddr3 &= 0x7ff;
-                taddrlow0 &= 0x3ff;
-                taddrlow1 &= 0x3ff;
-                taddrlow2 &= 0x3ff;
-                taddrlow3 &= 0x3ff;
-
-                uint16_t c0, c1, c2, c3;
-                int32_t y0, y1, y2, y3, u0, u1, u2, u3, v0, v1, v2, v3;
-
-                c0 = tc16[taddrlow0];
-                c1 = tc16[taddrlow1];
-                c2 = tc16[taddrlow2];
-                c3 = tc16[taddrlow3];
-
-                y0 = wstate->tmem[taddr0 | 0x800];
-                u0 = c0 >> 8;
-                v0 = c0 & 0xff;
-                y1 = wstate->tmem[taddr1 | 0x800];
-                u1 = c1 >> 8;
-                v1 = c1 & 0xff;
-                y2 = wstate->tmem[taddr2 | 0x800];
-                u2 = c2 >> 8;
-                v2 = c2 & 0xff;
-                y3 = wstate->tmem[taddr3 | 0x800];
-                u3 = c3 >> 8;
-                v3 = c3 & 0xff;
-
-                u0 = u0 - 0x80;
-                v0 = v0 - 0x80;
-                u1 = u1 - 0x80;
-                v1 = v1 - 0x80;
-                u2 = u2 - 0x80;
-                v2 = v2 - 0x80;
-                u3 = u3 - 0x80;
-                v3 = v3 - 0x80;
-
-                color0->r = u0;
-                color0->g = v0;
-                color1->r = u1;
-                color1->g = v1;
-                color2->r = u2;
-                color2->g = v2;
-                color3->r = u3;
-                color3->g = v3;
-
-                color0->b = color0->a = y0;
-                color1->b = color1->a = y1;
-                color2->b = color2->a = y2;
-                color3->b = color3->a = y3;
+            for (int k = 0; k < 4; k++) {
+                c1[k] = tc16[taddrs_low[k] & 0x3ff];
+                c2[k] = wstate->tmem[(taddrs[k] & 0x7ff) | 0x800];
             }
             break;
         case TEXEL_YUV32:
-            {
-                uint16_t c0, c1, c2, c3;
-                int32_t y0, y1, y2, y3, u0, u1, u2, u3, v0, v1, v2, v3;
-                uint32_t xort0, xort1;
+            for (int k = 0; k < 4; k++) {
+                c1[k] = tc16[taddrs_low[k] & 0x3ff];
 
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1;
+                int ys = (k & 1) ? s0 : s1;
+                c2[k] = (ys & 1) ? wstate->tmem[(taddrs[k] & 0x7ff) | 0x800]
+                                 : tc16[((taddrs[k] >> 1) & 0x3ff) | (0x800 >> 1)];
+            }
+            break;
+    }
 
-                taddrlow0 = (taddr0) >> 1;
-                taddrlow1 = (taddr1 + sdiff) >> 1;
-                taddrlow2 = (taddr2) >> 1;
-                taddrlow3 = (taddr3 + sdiff) >> 1;
+    // Format Conversion
 
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddrlow0 ^= xort;
-                taddrlow1 ^= xort;
-                xort = (t1 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddrlow2 ^= xort;
-                taddrlow3 ^= xort;
+    switch (wstate->tile[tilenum].f.notlutswitch) {
+        case_no_default;
 
-                taddrlow0 &= 0x3ff;
-                taddrlow1 &= 0x3ff;
-                taddrlow2 &= 0x3ff;
-                taddrlow3 &= 0x3ff;
-
-                c0 = tc16[taddrlow0];
-                c1 = tc16[taddrlow1];
-                c2 = tc16[taddrlow2];
-                c3 = tc16[taddrlow3];
-
-                u0 = c0 >> 8;
-                v0 = c0 & 0xff;
-                u1 = c1 >> 8;
-                v1 = c1 & 0xff;
-                u2 = c2 >> 8;
-                v2 = c2 & 0xff;
-                u3 = c3 >> 8;
-                v3 = c3 & 0xff;
-
-                u0 = u0 - 0x80;
-                v0 = v0 - 0x80;
-                u1 = u1 - 0x80;
-                v1 = v1 - 0x80;
-                u2 = u2 - 0x80;
-                v2 = v2 - 0x80;
-                u3 = u3 - 0x80;
-                v3 = v3 - 0x80;
-
-                color0->r = u0;
-                color0->g = v0;
-                color1->r = u1;
-                color1->g = v1;
-                color2->r = u2;
-                color2->g = v2;
-                color3->r = u3;
-                color3->g = v3;
-
-                xort0 = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                xort1 = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-
-                if (s0 & 1) {
-                    taddr0 ^= xort0;
-                    taddr2 ^= xort1;
-
-                    taddr0 &= 0x7ff;
-                    taddr2 &= 0x7ff;
-
-                    y0 = wstate->tmem[taddr0 | 0x800];
-                    y2 = wstate->tmem[taddr2 | 0x800];
-
-                    color0->b = color0->a = y0;
-                    color2->b = color2->a = y2;
-                } else {
-                    y0 = tc16[taddrlow0 | 0x400];
-                    y2 = tc16[taddrlow2 | 0x400];
-
-                    color0->b = y0 >> 8;
-                    color0->a = ((y0 >> 8) & 0xf) | (y0 & 0xf0);
-                    color2->b = y2 >> 8;
-                    color2->a = ((y2 >> 8) & 0xf) | (y2 & 0xf0);
-                }
-
-                if (s1 & 1) {
-                    taddr1 ^= xort0;
-                    taddr3 ^= xort1;
-
-                    taddr1 &= 0x7ff;
-                    taddr3 &= 0x7ff;
-
-                    y1 = wstate->tmem[taddr1 | 0x800];
-                    y3 = wstate->tmem[taddr3 | 0x800];
-
-                    color1->b = color1->a = y1;
-                    color3->b = color3->a = y3;
-                } else {
-                    taddr1 ^= xort0;
-                    taddr3 ^= xort1;
-
-                    taddr1 = (taddr1 >> 1) & 0x3ff;
-                    taddr3 = (taddr3 >> 1) & 0x3ff;
-
-                    y1 = tc16[taddr1 | 0x400];
-                    y3 = tc16[taddr3 | 0x400];
-
-                    color1->b = y1 >> 8;
-                    color1->a = ((y1 >> 8) & 0xf) | (y1 & 0xf0);
-                    color3->b = y3 >> 8;
-                    color3->a = ((y3 >> 8) & 0xf) | (y3 & 0xf0);
-                }
+        case TEXEL_RGBA4:
+        case TEXEL_I4:
+            for (int k = 0; k < 4; k++) {
+                uint16_t c = c1[k];
+                colors[k]->r = colors[k]->g = colors[k]->b = colors[k]->a = (c << 4) | c;
             }
             break;
         case TEXEL_CI4:
-            {
-                taddr0 = ((tbase0 << 4) + s0) >> 1;
-                taddr1 = ((tbase0 << 4) + s1) >> 1;
-                taddr2 = ((tbase2 << 4) + s0) >> 1;
-                taddr3 = ((tbase2 << 4) + s1) >> 1;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                uint32_t p;
-
-                taddr0 &= 0xfff;
-                taddr1 &= 0xfff;
-                taddr2 &= 0xfff;
-                taddr3 &= 0xfff;
-                ands = s0 & 1;
-                p = wstate->tmem[taddr0];
-                p = (ands) ? (p & 0xf) : (p >> 4);
-                p = (tpal << 4) | p;
-                color0->r = color0->g = color0->b = color0->a = p;
-                p = wstate->tmem[taddr2];
-                p = (ands) ? (p & 0xf) : (p >> 4);
-                p = (tpal << 4) | p;
-                color2->r = color2->g = color2->b = color2->a = p;
-
-                ands = s1 & 1;
-                p = wstate->tmem[taddr1];
-                p = (ands) ? (p & 0xf) : (p >> 4);
-                p = (tpal << 4) | p;
-                color1->r = color1->g = color1->b = color1->a = p;
-                p = wstate->tmem[taddr3];
-                p = (ands) ? (p & 0xf) : (p >> 4);
-                p = (tpal << 4) | p;
-                color3->r = color3->g = color3->b = color3->a = p;
-            }
-            break;
-        case TEXEL_CI8:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                uint32_t p;
-
-                taddr0 &= 0xfff;
-                taddr1 &= 0xfff;
-                taddr2 &= 0xfff;
-                taddr3 &= 0xfff;
-                p = wstate->tmem[taddr0];
-                color0->r = p;
-                color0->g = p;
-                color0->b = p;
-                color0->a = p;
-                p = wstate->tmem[taddr2];
-                color2->r = p;
-                color2->g = p;
-                color2->b = p;
-                color2->a = p;
-                p = wstate->tmem[taddr1];
-                color1->r = p;
-                color1->g = p;
-                color1->b = p;
-                color1->a = p;
-                p = wstate->tmem[taddr3];
-                color3->r = p;
-                color3->g = p;
-                color3->b = p;
-                color3->a = p;
-            }
-            break;
-        case TEXEL_CI16:
-        case TEXEL_CI32:
-            {
-                taddr0 = (tbase0 << 2) + s0;
-                taddr1 = (tbase0 << 2) + s1;
-                taddr2 = (tbase2 << 2) + s0;
-                taddr3 = (tbase2 << 2) + s1;
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                uint16_t c0, c1, c2, c3;
-
-                taddr0 &= 0x7ff;
-                taddr1 &= 0x7ff;
-                taddr2 &= 0x7ff;
-                taddr3 &= 0x7ff;
-                c0 = tc16[taddr0];
-                color0->r = c0 >> 8;
-                color0->g = c0 & 0xff;
-                color0->b = c0 >> 8;
-                color0->a = c0 & 0xff;
-                c1 = tc16[taddr1];
-                color1->r = c1 >> 8;
-                color1->g = c1 & 0xff;
-                color1->b = c1 >> 8;
-                color1->a = c1 & 0xff;
-                c2 = tc16[taddr2];
-                color2->r = c2 >> 8;
-                color2->g = c2 & 0xff;
-                color2->b = c2 >> 8;
-                color2->a = c2 & 0xff;
-                c3 = tc16[taddr3];
-                color3->r = c3 >> 8;
-                color3->g = c3 & 0xff;
-                color3->b = c3 >> 8;
-                color3->a = c3 & 0xff;
+            for (int k = 0; k < 4; k++) {
+                uint16_t c = c1[k];
+                colors[k]->r = colors[k]->g = colors[k]->b = colors[k]->a = (wstate->tile[tilenum].palette << 4) | c;
             }
             break;
         case TEXEL_IA4:
-            {
-                taddr0 = ((tbase0 << 4) + s0) >> 1;
-                taddr1 = ((tbase0 << 4) + s1) >> 1;
-                taddr2 = ((tbase2 << 4) + s0) >> 1;
-                taddr3 = ((tbase2 << 4) + s1) >> 1;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
+            for (int k = 0; k < 4; k++) {
+                uint16_t c = c1[k];
+                uint8_t i = c & 0xe;
+                uint8_t a = c & 0x1;
+                colors[k]->r = colors[k]->g = colors[k]->b = (i << 4) | (i << 1) | (i >> 2);
+                colors[k]->a = a * 255;
+            }
+            break;
 
-                uint32_t p, i;
-
-                taddr0 &= 0xfff;
-                taddr1 &= 0xfff;
-                taddr2 &= 0xfff;
-                taddr3 &= 0xfff;
-                ands = s0 & 1;
-                p = wstate->tmem[taddr0];
-                p = ands ? (p & 0xf) : (p >> 4);
-                i = p & 0xe;
-                i = (i << 4) | (i << 1) | (i >> 2);
-                color0->r = i;
-                color0->g = i;
-                color0->b = i;
-                color0->a = (p & 0x1) ? 0xff : 0;
-                p = wstate->tmem[taddr2];
-                p = ands ? (p & 0xf) : (p >> 4);
-                i = p & 0xe;
-                i = (i << 4) | (i << 1) | (i >> 2);
-                color2->r = i;
-                color2->g = i;
-                color2->b = i;
-                color2->a = (p & 0x1) ? 0xff : 0;
-
-                ands = s1 & 1;
-                p = wstate->tmem[taddr1];
-                p = ands ? (p & 0xf) : (p >> 4);
-                i = p & 0xe;
-                i = (i << 4) | (i << 1) | (i >> 2);
-                color1->r = i;
-                color1->g = i;
-                color1->b = i;
-                color1->a = (p & 0x1) ? 0xff : 0;
-                p = wstate->tmem[taddr3];
-                p = ands ? (p & 0xf) : (p >> 4);
-                i = p & 0xe;
-                i = (i << 4) | (i << 1) | (i >> 2);
-                color3->r = i;
-                color3->g = i;
-                color3->b = i;
-                color3->a = (p & 0x1) ? 0xff : 0;
+        case TEXEL_RGBA8:
+        case TEXEL_I8:
+        case TEXEL_CI8:
+            for (int k = 0; k < 4; k++) {
+                colors[k]->r = colors[k]->g = colors[k]->b = colors[k]->a = c1[k];
             }
             break;
         case TEXEL_IA8:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
+            for (int k = 0; k < 4; k++) {
+                uint16_t c = c1[k];
+                uint8_t i = c & 0xf0;
+                uint8_t a = c & 0x0f;
+                colors[k]->r = colors[k]->g = colors[k]->b = i | (i >> 4);
+                colors[k]->a = (a << 4) | a;
+            }
+            break;
 
-                uint32_t p, i;
-
-                taddr0 &= 0xfff;
-                taddr1 &= 0xfff;
-                taddr2 &= 0xfff;
-                taddr3 &= 0xfff;
-                p = wstate->tmem[taddr0];
-                i = p & 0xf0;
-                i |= (i >> 4);
-                color0->r = i;
-                color0->g = i;
-                color0->b = i;
-                color0->a = ((p & 0xf) << 4) | (p & 0xf);
-                p = wstate->tmem[taddr1];
-                i = p & 0xf0;
-                i |= (i >> 4);
-                color1->r = i;
-                color1->g = i;
-                color1->b = i;
-                color1->a = ((p & 0xf) << 4) | (p & 0xf);
-                p = wstate->tmem[taddr2];
-                i = p & 0xf0;
-                i |= (i >> 4);
-                color2->r = i;
-                color2->g = i;
-                color2->b = i;
-                color2->a = ((p & 0xf) << 4) | (p & 0xf);
-                p = wstate->tmem[taddr3];
-                i = p & 0xf0;
-                i |= (i >> 4);
-                color3->r = i;
-                color3->g = i;
-                color3->b = i;
-                color3->a = ((p & 0xf) << 4) | (p & 0xf);
+        case TEXEL_RGBA16:
+            for (int k = 0; k < 4; k++) {
+                uint16_t c = c1[k];
+                colors[k]->r = RGBA16_EXTEND_R(c);
+                colors[k]->g = RGBA16_EXTEND_G(c);
+                colors[k]->b = RGBA16_EXTEND_B(c);
+                colors[k]->a = (c & 1) * 255;
             }
             break;
         case TEXEL_IA16:
-            {
-                taddr0 = (tbase0 << 2) + s0;
-                taddr1 = (tbase0 << 2) + s1;
-                taddr2 = (tbase2 << 2) + s0;
-                taddr3 = (tbase2 << 2) + s1;
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                uint16_t c0, c1, c2, c3;
-
-                taddr0 &= 0x7ff;
-                taddr1 &= 0x7ff;
-                taddr2 &= 0x7ff;
-                taddr3 &= 0x7ff;
-                c0 = tc16[taddr0];
-                color0->r = color0->g = color0->b = c0 >> 8;
-                color0->a = c0 & 0xff;
-                c1 = tc16[taddr1];
-                color1->r = color1->g = color1->b = c1 >> 8;
-                color1->a = c1 & 0xff;
-                c2 = tc16[taddr2];
-                color2->r = color2->g = color2->b = c2 >> 8;
-                color2->a = c2 & 0xff;
-                c3 = tc16[taddr3];
-                color3->r = color3->g = color3->b = c3 >> 8;
-                color3->a = c3 & 0xff;
+            for (int k = 0; k < 4; k++) {
+                uint16_t c = c1[k];
+                colors[k]->r = colors[k]->g = colors[k]->b = c >> 8;
+                colors[k]->a = c & 0xff;
             }
             break;
+
+        case TEXEL_CI16:
+        case TEXEL_CI32:
         case TEXEL_IA32:
-            {
-                taddr0 = (tbase0 << 2) + s0;
-                taddr1 = (tbase0 << 2) + s1;
-                taddr2 = (tbase2 << 2) + s0;
-                taddr3 = (tbase2 << 2) + s1;
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                uint16_t c0, c1, c2, c3;
-
-                taddr0 &= 0x7ff;
-                taddr1 &= 0x7ff;
-                taddr2 &= 0x7ff;
-                taddr3 &= 0x7ff;
-                c0 = tc16[taddr0];
-                color0->r = c0 >> 8;
-                color0->g = c0 & 0xff;
-                color0->b = c0 >> 8;
-                color0->a = c0 & 0xff;
-                c1 = tc16[taddr1];
-                color1->r = c1 >> 8;
-                color1->g = c1 & 0xff;
-                color1->b = c1 >> 8;
-                color1->a = c1 & 0xff;
-                c2 = tc16[taddr2];
-                color2->r = c2 >> 8;
-                color2->g = c2 & 0xff;
-                color2->b = c2 >> 8;
-                color2->a = c2 & 0xff;
-                c3 = tc16[taddr3];
-                color3->r = c3 >> 8;
-                color3->g = c3 & 0xff;
-                color3->b = c3 >> 8;
-                color3->a = c3 & 0xff;
-            }
-            break;
-        case TEXEL_I4:
-            {
-                taddr0 = ((tbase0 << 4) + s0) >> 1;
-                taddr1 = ((tbase0 << 4) + s1) >> 1;
-                taddr2 = ((tbase2 << 4) + s0) >> 1;
-                taddr3 = ((tbase2 << 4) + s1) >> 1;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                uint32_t p, c0, c1, c2, c3;
-
-                taddr0 &= 0xfff;
-                taddr1 &= 0xfff;
-                taddr2 &= 0xfff;
-                taddr3 &= 0xfff;
-                ands = s0 & 1;
-                p = wstate->tmem[taddr0];
-                c0 = ands ? (p & 0xf) : (p >> 4);
-                c0 |= (c0 << 4);
-                color0->r = color0->g = color0->b = color0->a = c0;
-                p = wstate->tmem[taddr2];
-                c2 = ands ? (p & 0xf) : (p >> 4);
-                c2 |= (c2 << 4);
-                color2->r = color2->g = color2->b = color2->a = c2;
-
-                ands = s1 & 1;
-                p = wstate->tmem[taddr1];
-                c1 = ands ? (p & 0xf) : (p >> 4);
-                c1 |= (c1 << 4);
-                color1->r = color1->g = color1->b = color1->a = c1;
-                p = wstate->tmem[taddr3];
-                c3 = ands ? (p & 0xf) : (p >> 4);
-                c3 |= (c3 << 4);
-                color3->r = color3->g = color3->b = color3->a = c3;
-            }
-            break;
-        case TEXEL_I8:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                uint32_t p;
-
-                taddr0 &= 0xfff;
-                taddr1 &= 0xfff;
-                taddr2 &= 0xfff;
-                taddr3 &= 0xfff;
-
-                p = wstate->tmem[taddr0];
-                color0->r = p;
-                color0->g = p;
-                color0->b = p;
-                color0->a = p;
-                p = wstate->tmem[taddr1];
-                color1->r = p;
-                color1->g = p;
-                color1->b = p;
-                color1->a = p;
-                p = wstate->tmem[taddr2];
-                color2->r = p;
-                color2->g = p;
-                color2->b = p;
-                color2->a = p;
-                p = wstate->tmem[taddr3];
-                color3->r = p;
-                color3->g = p;
-                color3->b = p;
-                color3->a = p;
-            }
-            break;
         case TEXEL_I16:
         case TEXEL_I32:
-        default:
-            {
-                taddr0 = (tbase0 << 2) + s0;
-                taddr1 = (tbase0 << 2) + s1;
-                taddr2 = (tbase2 << 2) + s0;
-                taddr3 = (tbase2 << 2) + s1;
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
+            for (int k = 0; k < 4; k++) {
+                uint16_t c = c1[k];
+                colors[k]->r = c >> 8;
+                colors[k]->g = c & 0xff;
+                colors[k]->b = c >> 8;
+                colors[k]->a = c & 0xff;
+            }
+            break;
 
-                uint16_t c0, c1, c2, c3;
+        case TEXEL_RGBA32:
+            for (int k = 0; k < 4; k++) {
+                uint16_t c1k = c1[k];
+                uint16_t c2k = c2[k];
+                colors[k]->r = c1k >> 8;
+                colors[k]->g = c1k & 0xff;
+                colors[k]->b = c2k >> 8;
+                colors[k]->a = c2k & 0xff;
+            }
+            break;
 
-                taddr0 &= 0x7ff;
-                taddr1 &= 0x7ff;
-                taddr2 &= 0x7ff;
-                taddr3 &= 0x7ff;
-                c0 = tc16[taddr0];
-                color0->r = c0 >> 8;
-                color0->g = c0 & 0xff;
-                color0->b = c0 >> 8;
-                color0->a = c0 & 0xff;
-                c1 = tc16[taddr1];
-                color1->r = c1 >> 8;
-                color1->g = c1 & 0xff;
-                color1->b = c1 >> 8;
-                color1->a = c1 & 0xff;
-                c2 = tc16[taddr2];
-                color2->r = c2 >> 8;
-                color2->g = c2 & 0xff;
-                color2->b = c2 >> 8;
-                color2->a = c2 & 0xff;
-                c3 = tc16[taddr3];
-                color3->r = c3 >> 8;
-                color3->g = c3 & 0xff;
-                color3->b = c3 >> 8;
-                color3->a = c3 & 0xff;
+            /* YUV Formats */
+
+        case TEXEL_YUV4:
+            for (int k = 0; k < 4; k++) {
+                uint16_t c = c1[k];
+                c &= 0xf0;
+                c = c | (c >> 4);
+                colors[k]->r = colors[k]->g = c - 0x80;
+
+                if (unequaluppers) {
+                    c = c1[3 - k];
+                    c &= 0xf0;
+                    c = c | (c >> 4);
+                }
+                colors[k]->b = colors[k]->a = c;
+            }
+            break;
+
+        case TEXEL_YUV8:
+            for (int k = 0; k < 4; k++) {
+                uint16_t c = c1[k];
+                colors[k]->r = colors[k]->g = c - 0x80;
+
+                if (unequaluppers)
+                    c = c1[3 - k];
+
+                colors[k]->b = colors[k]->a = c;
+            }
+            break;
+
+        case TEXEL_YUV16:
+        case TEXEL_YUV32:
+            for (int k = 0; k < 4; k++) {
+                uint16_t c1k = c1[k];
+                uint16_t c2k = c2[k];
+
+                int32_t y = c2k;
+                int32_t u = c1k >> 8;
+                int32_t v = c1k & 0xff;
+                colors[k]->r = u - 0x80;
+                colors[k]->g = v - 0x80;
+
+                int ys = (k & 1) ? s0 : s1;
+                if (tformat == TEXEL_YUV16 || ys & 1) {
+                    colors[k]->b = colors[k]->a = y;
+                } else {
+                    colors[k]->b = y >> 8;
+                    colors[k]->a = ((y >> 8) & 0xf) | (y & 0xf0);
+                }
             }
             break;
     }
 }
 
 static INLINE void
-fetch_texel_entlut_quadro(struct rdp_state *wstate, struct color *color0, struct color *color1, struct color *color2,
-                          struct color *color3, int s0, int sdiff, int t0, int tdiff, uint32_t tilenum, int isupper,
-                          int isupperrg)
+tlut_dereference(struct rdp_state *wstate, uint32_t *taddrs, struct color *color0, struct color *color1,
+                 struct color *color2, struct color *color3, bool upperrg, bool upperba)
 {
-    uint32_t tbase0 = wstate->tile[tilenum].line * (t0 & 0xff) + wstate->tile[tilenum].tmem;
-    int t1 = (t0 & 0xff) + tdiff;
-    int s1;
+    // Dereference tlut
+    // Hardware is capable of doing this on the same cycle since the tlut data
+    // is in high tmem and the indices are in low tmem, but might delay 1 cycle
+    // anyway depending on pipelining and signal propagation speeds
 
-    uint32_t tbase2 = wstate->tile[tilenum].line * t1 + wstate->tile[tilenum].tmem;
-    uint32_t tpal = wstate->tile[tilenum].palette << 4;
-    uint32_t xort, ands;
+    uint32_t xorupperrg = upperrg ? (WORD_ADDR_XOR ^ 3) : WORD_ADDR_XOR;
 
-    uint32_t taddr0, taddr1, taddr2, taddr3;
-    uint16_t c0, c1, c2, c3;
+    uint16_t c0 = tlut[taddrs[0] ^ xorupperrg];
+    uint16_t c2 = tlut[taddrs[2] ^ xorupperrg];
+    uint16_t c1 = tlut[taddrs[1] ^ xorupperrg];
+    uint16_t c3 = tlut[taddrs[3] ^ xorupperrg];
 
-    uint32_t xorupperrg = isupperrg ? (WORD_ADDR_XOR ^ 3) : WORD_ADDR_XOR;
-
-    switch (wstate->tile[tilenum].f.tlutswitch) {
-        case 0:
-        case 1:
-        case 2:
-            {
-                s1 = s0 + sdiff;
-                taddr0 = ((tbase0 << 4) + s0) >> 1;
-                taddr1 = ((tbase0 << 4) + s1) >> 1;
-                taddr2 = ((tbase2 << 4) + s0) >> 1;
-                taddr3 = ((tbase2 << 4) + s1) >> 1;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                ands = s0 & 1;
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-                c0 = (ands) ? (c0 & 0xf) : (c0 >> 4);
-                taddr0 = (tpal | c0) << 2;
-                c2 = wstate->tmem[taddr2 & 0x7ff];
-                c2 = (ands) ? (c2 & 0xf) : (c2 >> 4);
-                taddr2 = ((tpal | c2) << 2) + 2;
-
-                ands = s1 & 1;
-                c1 = wstate->tmem[taddr1 & 0x7ff];
-                c1 = (ands) ? (c1 & 0xf) : (c1 >> 4);
-                taddr1 = ((tpal | c1) << 2) + 1;
-                c3 = wstate->tmem[taddr3 & 0x7ff];
-                c3 = (ands) ? (c3 & 0xf) : (c3 >> 4);
-                taddr3 = ((tpal | c3) << 2) + 3;
-            }
-            break;
-        case 3:
-            {
-                s1 = s0 + (sdiff << 1);
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1;
-
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-                c0 >>= 4;
-                taddr0 = (tpal | c0) << 2;
-                c2 = wstate->tmem[taddr2 & 0x7ff];
-                c2 >>= 4;
-                taddr2 = ((tpal | c2) << 2) + 2;
-
-                c1 = wstate->tmem[taddr1 & 0x7ff];
-                c1 >>= 4;
-                taddr1 = ((tpal | c1) << 2) + 1;
-                c3 = wstate->tmem[taddr3 & 0x7ff];
-                c3 >>= 4;
-                taddr3 = ((tpal | c3) << 2) + 3;
-            }
-            break;
-        case 4:
-        case 5:
-        case 6:
-            {
-                s1 = s0 + sdiff;
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1;
-
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-                taddr0 = c0 << 2;
-                c2 = wstate->tmem[taddr2 & 0x7ff];
-                taddr2 = (c2 << 2) + 2;
-                c1 = wstate->tmem[taddr1 & 0x7ff];
-                taddr1 = (c1 << 2) + 1;
-                c3 = wstate->tmem[taddr3 & 0x7ff];
-                taddr3 = (c3 << 2) + 3;
-            }
-            break;
-        case 7:
-            {
-                s1 = s0 + (sdiff << 1);
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1;
-
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-                taddr0 = c0 << 2;
-                c2 = wstate->tmem[taddr2 & 0x7ff];
-                taddr2 = (c2 << 2) + 2;
-                c1 = wstate->tmem[taddr1 & 0x7ff];
-                taddr1 = (c1 << 2) + 1;
-                c3 = wstate->tmem[taddr3 & 0x7ff];
-                taddr3 = (c3 << 2) + 3;
-            }
-            break;
-        case 8:
-        case 9:
-        case 10:
-            {
-                s1 = s0 + sdiff;
-                taddr0 = (tbase0 << 2) + s0;
-                taddr1 = (tbase0 << 2) + s1;
-                taddr2 = (tbase2 << 2) + s0;
-                taddr3 = (tbase2 << 2) + s1;
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                c0 = tc16[taddr0 & 0x3ff];
-                taddr0 = (c0 >> 6) & ~3;
-                c1 = tc16[taddr1 & 0x3ff];
-                taddr1 = ((c1 >> 6) & ~3) + 1;
-                c2 = tc16[taddr2 & 0x3ff];
-                taddr2 = ((c2 >> 6) & ~3) + 2;
-                c3 = tc16[taddr3 & 0x3ff];
-                taddr3 = (c3 >> 6) | 3;
-            }
-            break;
-        case 11:
-            {
-                s1 = s0 + (sdiff << 1);
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1;
-
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-                taddr0 = c0 << 2;
-                c2 = wstate->tmem[taddr2 & 0x7ff];
-                taddr2 = (c2 << 2) + 2;
-                c1 = wstate->tmem[taddr1 & 0x7ff];
-                taddr1 = (c1 << 2) + 1;
-                c3 = wstate->tmem[taddr3 & 0x7ff];
-                taddr3 = (c3 << 2) + 3;
-            }
-            break;
-        case 12:
-        case 13:
-        case 14:
-            {
-                s1 = s0 + sdiff;
-                taddr0 = (tbase0 << 2) + s0;
-                taddr1 = (tbase0 << 2) + s1;
-                taddr2 = (tbase2 << 2) + s0;
-                taddr3 = (tbase2 << 2) + s1;
-
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                c0 = tc16[taddr0 & 0x3ff];
-                taddr0 = (c0 >> 6) & ~3;
-                c1 = tc16[taddr1 & 0x3ff];
-                taddr1 = ((c1 >> 6) & ~3) + 1;
-                c2 = tc16[taddr2 & 0x3ff];
-                taddr2 = ((c2 >> 6) & ~3) + 2;
-                c3 = tc16[taddr3 & 0x3ff];
-                taddr3 = (c3 >> 6) | 3;
-            }
-            break;
-        case 15:
-        default:
-            {
-                s1 = s0 + (sdiff << 1);
-                taddr0 = (tbase0 << 3) + s0;
-                taddr1 = (tbase0 << 3) + s1;
-                taddr2 = (tbase2 << 3) + s0;
-                taddr3 = (tbase2 << 3) + s1;
-
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-                taddr1 ^= xort;
-                xort = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr2 ^= xort;
-                taddr3 ^= xort;
-
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-                taddr0 = c0 << 2;
-                c2 = wstate->tmem[taddr2 & 0x7ff];
-                taddr2 = (c2 << 2) + 2;
-                c1 = wstate->tmem[taddr1 & 0x7ff];
-                taddr1 = (c1 << 2) + 1;
-                c3 = wstate->tmem[taddr3 & 0x7ff];
-                taddr3 = (c3 << 2) + 3;
-            }
-            break;
+    uint16_t c0s, c1s, c2s, c3s;
+    if (upperrg == upperba) {
+        c0s = c0;
+        c1s = c1;
+        c2s = c2;
+        c3s = c3;
+    } else {
+        c0s = c3;
+        c1s = c2;
+        c2s = c1;
+        c3s = c0;
     }
 
-    c0 = tlut[taddr0 ^ xorupperrg];
-    c2 = tlut[taddr2 ^ xorupperrg];
-    c1 = tlut[taddr1 ^ xorupperrg];
-    c3 = tlut[taddr3 ^ xorupperrg];
+    if (wstate->other_modes.tlut_type == TLUT_RGBA16) {
+        color0->r = RGBA16_EXTEND_R(c0);
+        color0->g = RGBA16_EXTEND_G(c0);
+        color0->b = RGBA16_EXTEND_B(c0s);
+        color0->a = (c0s & 1) ? 0xff : 0;
 
-    if (!wstate->other_modes.tlut_type) {
-        color0->r = GET_HI_RGBA16_TMEM(c0);
-        color0->g = GET_MED_RGBA16_TMEM(c0);
-        color1->r = GET_HI_RGBA16_TMEM(c1);
-        color1->g = GET_MED_RGBA16_TMEM(c1);
-        color2->r = GET_HI_RGBA16_TMEM(c2);
-        color2->g = GET_MED_RGBA16_TMEM(c2);
-        color3->r = GET_HI_RGBA16_TMEM(c3);
-        color3->g = GET_MED_RGBA16_TMEM(c3);
+        color1->r = RGBA16_EXTEND_R(c1);
+        color1->g = RGBA16_EXTEND_G(c1);
+        color1->b = RGBA16_EXTEND_B(c1s);
+        color1->a = (c1s & 1) ? 0xff : 0;
 
-        if (isupper == isupperrg) {
-            color0->b = GET_LOW_RGBA16_TMEM(c0);
-            color0->a = (c0 & 1) ? 0xff : 0;
-            color1->b = GET_LOW_RGBA16_TMEM(c1);
-            color1->a = (c1 & 1) ? 0xff : 0;
-            color2->b = GET_LOW_RGBA16_TMEM(c2);
-            color2->a = (c2 & 1) ? 0xff : 0;
-            color3->b = GET_LOW_RGBA16_TMEM(c3);
-            color3->a = (c3 & 1) ? 0xff : 0;
-        } else {
-            color0->b = GET_LOW_RGBA16_TMEM(c3);
-            color0->a = (c3 & 1) ? 0xff : 0;
-            color1->b = GET_LOW_RGBA16_TMEM(c2);
-            color1->a = (c2 & 1) ? 0xff : 0;
-            color2->b = GET_LOW_RGBA16_TMEM(c1);
-            color2->a = (c1 & 1) ? 0xff : 0;
-            color3->b = GET_LOW_RGBA16_TMEM(c0);
-            color3->a = (c0 & 1) ? 0xff : 0;
-        }
-    } else {
+        color2->r = RGBA16_EXTEND_R(c2);
+        color2->g = RGBA16_EXTEND_G(c2);
+        color2->b = RGBA16_EXTEND_B(c2s);
+        color2->a = (c2s & 1) ? 0xff : 0;
+
+        color3->r = RGBA16_EXTEND_R(c3);
+        color3->g = RGBA16_EXTEND_G(c3);
+        color3->b = RGBA16_EXTEND_B(c3s);
+        color3->a = (c3s & 1) ? 0xff : 0;
+    } else { // IA16
         color0->r = color0->g = c0 >> 8;
-        color1->r = color1->g = c1 >> 8;
-        color2->r = color2->g = c2 >> 8;
-        color3->r = color3->g = c3 >> 8;
+        color0->b = c0s >> 8;
+        color0->a = c0s & 0xff;
 
-        if (isupper == isupperrg) {
-            color0->b = c0 >> 8;
-            color0->a = c0 & 0xff;
-            color1->b = c1 >> 8;
-            color1->a = c1 & 0xff;
-            color2->b = c2 >> 8;
-            color2->a = c2 & 0xff;
-            color3->b = c3 >> 8;
-            color3->a = c3 & 0xff;
-        } else {
-            color0->b = c3 >> 8;
-            color0->a = c3 & 0xff;
-            color1->b = c2 >> 8;
-            color1->a = c2 & 0xff;
-            color2->b = c1 >> 8;
-            color2->a = c1 & 0xff;
-            color3->b = c0 >> 8;
-            color3->a = c0 & 0xff;
-        }
+        color1->r = color1->g = c1 >> 8;
+        color1->b = c1s >> 8;
+        color1->a = c1s & 0xff;
+
+        color2->r = color2->g = c2 >> 8;
+        color2->b = c2s >> 8;
+        color2->a = c2s & 0xff;
+
+        color3->r = color3->g = c3 >> 8;
+        color3->b = c3s >> 8;
+        color3->a = c3s & 0xff;
     }
 }
 
 static INLINE void
 fetch_texel_entlut_quadro_nearest(struct rdp_state *wstate, struct color *color0, struct color *color1,
                                   struct color *color2, struct color *color3, int s0, int t0, uint32_t tilenum,
-                                  int isupper, int isupperrg)
+                                  int upperrg, int upperba)
 {
+    int tsize = wstate->tile[tilenum].size;
+    int tformat = wstate->tile[tilenum].format;
+    uint32_t tpal = wstate->tile[tilenum].palette;
+
+    // Determine address
+
     uint32_t tbase0 = wstate->tile[tilenum].line * t0 + wstate->tile[tilenum].tmem;
-    uint32_t tpal = wstate->tile[tilenum].palette << 4;
-    uint32_t xort, ands;
 
-    uint32_t taddr0 = 0;
-    uint16_t c0, c1, c2, c3;
+    uint32_t taddr;
+    if (tformat == FORMAT_YUV || tsize == PIXEL_SIZE_8BIT)
+        taddr = (tbase0 << 3) + s0;
+    else if (tsize == PIXEL_SIZE_4BIT)
+        taddr = ((tbase0 << 4) + s0) >> 1;
+    else // 16-bit or 32-bit (and not YUV)
+        taddr = (tbase0 << 2) + s0;
 
-    uint32_t xorupperrg = isupperrg ? (WORD_ADDR_XOR ^ 3) : WORD_ADDR_XOR;
+    // XOR for endianness
+
+    uint32_t xort;
+
+    if (tsize >= PIXEL_SIZE_16BIT && tformat != FORMAT_YUV)
+        xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR; // 16-bit samples
+    else
+        xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR; // 8-bit samples
+
+    taddr ^= xort;
+
+    // TMEM access for tlut index
+
+    uint16_t c;
 
     switch (wstate->tile[tilenum].f.tlutswitch) {
-        case 0:
-        case 1:
-        case 2:
-            {
-                taddr0 = ((tbase0 << 4) + s0) >> 1;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
+        case_no_default;
 
-                ands = s0 & 1;
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-                c0 = (ands) ? (c0 & 0xf) : (c0 >> 4);
-
-                taddr0 = (tpal | c0) << 2;
-            }
+        case 0: // CI4
+        case 1: // IA4
+        case 2: // I4 / RGBA4
+            c = wstate->tmem[taddr & 0x7ff];
+            c = (s0 & 1) ? (c & 0xf) : (c >> 4); // Alternate which 4 bits to use based on s coord
+            taddr = ((tpal << 4) | c) << 2;      // shift left by 2 for quad sampling 4 addresses in a row
             break;
-        case 3:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
 
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-
-                c0 >>= 4;
-
-                taddr0 = (tpal | c0) << 2;
-            }
+        case 3: // YUV4
+            // Like the other 4-bit formats except always use the upper 4 bits of the 8-bit sample
+            c = wstate->tmem[taddr & 0x7ff];
+            taddr = ((tpal << 4) | (c >> 4)) << 2;
             break;
-        case 4:
-        case 5:
-        case 6:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
 
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-
-                taddr0 = c0 << 2;
-            }
+        case 4:  // CI8
+        case 5:  // IA8
+        case 6:  // I8 / RGBA8
+        case 7:  // YUV8
+        case 11: // YUV16
+        case 15: // YUV32
+            c = wstate->tmem[taddr & 0x7ff];
+            taddr = c << 2;
             break;
-        case 7:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
 
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-
-                taddr0 = c0 << 2;
-            }
-            break;
-        case 8:
-        case 9:
-        case 10:
-            {
-                taddr0 = (tbase0 << 2) + s0;
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr0 ^= xort;
-
-                c0 = tc16[taddr0 & 0x3ff];
-
-                taddr0 = (c0 >> 6) & ~3;
-            }
-            break;
-        case 11:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-
-                taddr0 = c0 << 2;
-            }
-            break;
-        case 12:
-        case 13:
-        case 14:
-            {
-                taddr0 = (tbase0 << 2) + s0;
-                xort = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
-                taddr0 ^= xort;
-
-                c0 = tc16[taddr0 & 0x3ff];
-
-                taddr0 = (c0 >> 6) & ~3;
-            }
-            break;
-        case 15:
-        default:
-            {
-                taddr0 = (tbase0 << 3) + s0;
-                xort = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
-                taddr0 ^= xort;
-
-                c0 = wstate->tmem[taddr0 & 0x7ff];
-
-                taddr0 = c0 << 2;
-            }
+        case 8:  // CI16
+        case 9:  // IA16
+        case 10: // I16 / RGBA16
+        case 12: // CI32
+        case 13: // IA32
+        case 14: // I32 / RGBA32
+            c = tc16[taddr & 0x3ff];
+            taddr = (c >> 6) & ~3; // basically CI8 except using the upper 8 bits of the 16-bit sample
             break;
     }
 
-    c0 = tlut[taddr0 ^ xorupperrg];
-    c1 = tlut[(taddr0 + 1) ^ xorupperrg];
-    c2 = tlut[(taddr0 + 2) ^ xorupperrg];
-    c3 = tlut[(taddr0 + 3) ^ xorupperrg];
+    uint32_t taddrs[4] = {
+        taddr + 0,
+        taddr + 1,
+        taddr + 2,
+        taddr + 3,
+    };
 
-    if (!wstate->other_modes.tlut_type) {
-        color0->r = GET_HI_RGBA16_TMEM(c0);
-        color0->g = GET_MED_RGBA16_TMEM(c0);
-        color1->r = GET_HI_RGBA16_TMEM(c1);
-        color1->g = GET_MED_RGBA16_TMEM(c1);
-        color2->r = GET_HI_RGBA16_TMEM(c2);
-        color2->g = GET_MED_RGBA16_TMEM(c2);
-        color3->r = GET_HI_RGBA16_TMEM(c3);
-        color3->g = GET_MED_RGBA16_TMEM(c3);
+    tlut_dereference(wstate, taddrs, color0, color1, color2, color3, upperrg, upperba);
+}
 
-        if (isupper == isupperrg) {
-            color0->b = GET_LOW_RGBA16_TMEM(c0);
-            color0->a = (c0 & 1) ? 0xff : 0;
-            color1->b = GET_LOW_RGBA16_TMEM(c1);
-            color1->a = (c1 & 1) ? 0xff : 0;
-            color2->b = GET_LOW_RGBA16_TMEM(c2);
-            color2->a = (c2 & 1) ? 0xff : 0;
-            color3->b = GET_LOW_RGBA16_TMEM(c3);
-            color3->a = (c3 & 1) ? 0xff : 0;
-        } else {
-            color0->b = GET_LOW_RGBA16_TMEM(c3);
-            color0->a = (c3 & 1) ? 0xff : 0;
-            color1->b = GET_LOW_RGBA16_TMEM(c2);
-            color1->a = (c2 & 1) ? 0xff : 0;
-            color2->b = GET_LOW_RGBA16_TMEM(c1);
-            color2->a = (c1 & 1) ? 0xff : 0;
-            color3->b = GET_LOW_RGBA16_TMEM(c0);
-            color3->a = (c0 & 1) ? 0xff : 0;
-        }
+static INLINE void
+fetch_texel_entlut_quadro(struct rdp_state *wstate, struct color *color0, struct color *color1, struct color *color2,
+                          struct color *color3, int s0, int sdiff, int t0, int tdiff, uint32_t tilenum, int upperrg,
+                          int upperba)
+{
+    int tsize = wstate->tile[tilenum].size;
+    int tformat = wstate->tile[tilenum].format;
+    uint32_t tpal = wstate->tile[tilenum].palette;
+
+    // Addresses
+
+    uint32_t tbase0 = wstate->tile[tilenum].line * (t0 & 0xff) + wstate->tile[tilenum].tmem;
+    int t1 = (t0 & 0xff) + tdiff;
+    int s1;
+    uint32_t tbase2 = wstate->tile[tilenum].line * t1 + wstate->tile[tilenum].tmem;
+
+    uint32_t taddrs[4];
+
+    if (tformat == FORMAT_YUV)
+        s1 = s0 + (sdiff << 1);
+    else
+        s1 = s0 + sdiff;
+
+    if (tformat == FORMAT_YUV || tsize == PIXEL_SIZE_8BIT) {
+        taddrs[0] = (tbase0 << 3) + s0;
+        taddrs[1] = (tbase0 << 3) + s1;
+        taddrs[2] = (tbase2 << 3) + s0;
+        taddrs[3] = (tbase2 << 3) + s1;
+    } else if (tsize == PIXEL_SIZE_4BIT) {
+        taddrs[0] = ((tbase0 << 4) + s0) >> 1;
+        taddrs[1] = ((tbase0 << 4) + s1) >> 1;
+        taddrs[2] = ((tbase2 << 4) + s0) >> 1;
+        taddrs[3] = ((tbase2 << 4) + s1) >> 1;
     } else {
-        color0->r = color0->g = c0 >> 8;
-        color1->r = color1->g = c1 >> 8;
-        color2->r = color2->g = c2 >> 8;
-        color3->r = color3->g = c3 >> 8;
-
-        if (isupper == isupperrg) {
-            color0->b = c0 >> 8;
-            color0->a = c0 & 0xff;
-            color1->b = c1 >> 8;
-            color1->a = c1 & 0xff;
-            color2->b = c2 >> 8;
-            color2->a = c2 & 0xff;
-            color3->b = c3 >> 8;
-            color3->a = c3 & 0xff;
-        } else {
-            color0->b = c3 >> 8;
-            color0->a = c3 & 0xff;
-            color1->b = c2 >> 8;
-            color1->a = c2 & 0xff;
-            color2->b = c1 >> 8;
-            color2->a = c1 & 0xff;
-            color3->b = c0 >> 8;
-            color3->a = c0 & 0xff;
-        }
+        taddrs[0] = (tbase0 << 2) + s0;
+        taddrs[1] = (tbase0 << 2) + s1;
+        taddrs[2] = (tbase2 << 2) + s0;
+        taddrs[3] = (tbase2 << 2) + s1;
     }
+
+    // XOR for endianness
+
+    uint32_t xortL, xortH;
+
+    if (tsize >= PIXEL_SIZE_16BIT && tformat != FORMAT_YUV) {
+        xortL = (t0 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
+        xortH = (t1 & 1) ? WORD_XOR_DWORD_SWAP : WORD_ADDR_XOR;
+    } else {
+        xortL = (t0 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
+        xortH = (t1 & 1) ? BYTE_XOR_DWORD_SWAP : BYTE_ADDR_XOR;
+    }
+
+    taddrs[0] ^= xortL;
+    taddrs[1] ^= xortL;
+    taddrs[2] ^= xortH;
+    taddrs[3] ^= xortH;
+
+    // TMEM access for tlut indices
+
+    uint16_t c;
+
+    switch (wstate->tile[tilenum].f.tlutswitch) {
+        case_no_default;
+
+        case 0: // CI4
+        case 1: // IA4
+        case 2: // I4 / RGBA4
+            for (int k = 0; k < 4; k++) {
+                c = wstate->tmem[taddrs[k] & 0x7ff];
+                int sel = (k & 1) ? (s1 & 1) : (s0 & 1);
+                c = sel ? (c & 0xf) : (c >> 4);
+                taddrs[k] = (((tpal << 4) | c) << 2) + k;
+            }
+            break;
+
+        case 3: // YUV4
+            for (int k = 0; k < 4; k++) {
+                c = wstate->tmem[taddrs[k] & 0x7ff];
+                taddrs[k] = (((tpal << 4) | (c >> 4)) << 2) + k;
+            }
+            break;
+
+        case 4:  // CI8
+        case 5:  // IA8
+        case 6:  // I8 / RGBA8
+        case 7:  // YUV8
+        case 11: // YUV16
+        case 15: // YUV32
+            for (int k = 0; k < 4; k++) {
+                c = wstate->tmem[taddrs[k] & 0x7ff];
+                taddrs[k] = (c << 2) + k;
+            }
+            break;
+
+        case 8:  // CI16
+        case 9:  // IA16
+        case 10: // I16 / RGBA16
+        case 12: // CI32
+        case 13: // IA32
+        case 14: // I32 / RGBA32
+            for (int k = 0; k < 4; k++) {
+                c = tc16[taddrs[k] & 0x3ff];
+                taddrs[k] = ((c >> 6) & ~3) + k;
+            }
+            break;
+    }
+
+    tlut_dereference(wstate, taddrs, color0, color1, color2, color3, upperrg, upperba);
 }
 
 static void
 get_tmem_idx(struct rdp_state *wstate, int s, int t, uint32_t tilenum, uint32_t *idx0, uint32_t *idx1, uint32_t *idx2,
              uint32_t *idx3, uint32_t *bit3flipped, uint32_t *hibit)
 {
-    uint32_t tbase = (wstate->tile[tilenum].line * t) & 0x1ff;
-    tbase += wstate->tile[tilenum].tmem;
-    uint32_t tsize = wstate->tile[tilenum].size;
-    uint32_t tformat = wstate->tile[tilenum].format;
-    uint32_t sshorts = 0;
+    uint32_t tbase = wstate->tile[tilenum].tmem + ((wstate->tile[tilenum].line * t) & 0x1ff);
+    int tsize = wstate->tile[tilenum].size;
+    int tformat = wstate->tile[tilenum].format;
 
+    // Shift s coordinate based on formatting
     if (tsize == PIXEL_SIZE_8BIT || tformat == FORMAT_YUV)
-        sshorts = s >> 1;
+        s >>= 1;
     else if (tsize >= PIXEL_SIZE_16BIT)
-        sshorts = s;
+        s >>= 0;
     else
-        sshorts = s >> 2;
-    sshorts &= 0x7ff;
+        s >>= 2;
 
-    *bit3flipped = ((sshorts & 2) != 0) ^ (t & 1);
+    s &= 0x7ff;
 
-    int tidx_a = ((tbase << 2) + sshorts) & 0x7fd;
+    // something to do with yuv and rgba32 ?
+    *bit3flipped = ((s & 2) != 0) ^ (t & 1);
+
+    // tmem indices
+    int tidx_a = ((tbase << 2) + s) & 0x7fd;
     int tidx_b = (tidx_a + 1) & 0x7ff;
     int tidx_c = (tidx_a + 2) & 0x7ff;
     int tidx_d = (tidx_a + 3) & 0x7ff;
 
+    // high tmem?
     *hibit = (tidx_a & 0x400) != 0;
 
-    if (t & 1) {
+    if (t & 1) { // word swapping?
         tidx_a ^= 2;
         tidx_b ^= 2;
         tidx_c ^= 2;
         tidx_d ^= 2;
     }
 
+    // Sorts the four tmem indices {tidx_a, tidx_b, tidx_c, tidx_d} into {idx0, idx1, idx2, idx3}
+    // such that idx0 < idx1 < idx2 < idx3
     sort_tmem_idx(idx0, tidx_a, tidx_b, tidx_c, tidx_d, 0);
     sort_tmem_idx(idx1, tidx_a, tidx_b, tidx_c, tidx_d, 1);
     sort_tmem_idx(idx2, tidx_a, tidx_b, tidx_c, tidx_d, 2);
@@ -1840,32 +862,29 @@ static void
 read_tmem_copy(struct rdp_state *wstate, int s, int s1, int s2, int s3, int t, uint32_t tilenum, uint32_t *sortshort,
                int *hibits, int *lowbits)
 {
-    uint32_t tbase = (wstate->tile[tilenum].line * t) & 0x1ff;
-    tbase += wstate->tile[tilenum].tmem;
+    uint32_t tbase = wstate->tile[tilenum].tmem + ((wstate->tile[tilenum].line * t) & 0x1ff);
     uint32_t tsize = wstate->tile[tilenum].size;
     uint32_t tformat = wstate->tile[tilenum].format;
-    uint32_t shbytes = 0, shbytes1 = 0, shbytes2 = 0, shbytes3 = 0;
-    int32_t delta = 0;
-    uint32_t sortidx[8];
 
+    uint32_t shbytes0, shbytes1, shbytes2, shbytes3;
     if (tsize == PIXEL_SIZE_8BIT || tformat == FORMAT_YUV) {
-        shbytes = s << 1;
+        shbytes0 = s << 1;
         shbytes1 = s1 << 1;
         shbytes2 = s2 << 1;
         shbytes3 = s3 << 1;
-    } else if (tsize >= PIXEL_SIZE_16BIT) {
-        shbytes = s << 2;
+    } else if (tsize >= PIXEL_SIZE_16BIT) { // While this is >=, note that PIXEL_SIZE_32BIT is invalid for copy mode
+        shbytes0 = s << 2;
         shbytes1 = s1 << 2;
         shbytes2 = s2 << 2;
         shbytes3 = s3 << 2;
     } else {
-        shbytes = s;
+        shbytes0 = s;
         shbytes1 = s1;
         shbytes2 = s2;
         shbytes3 = s3;
     }
 
-    shbytes &= 0x1fff;
+    shbytes0 &= 0x1fff;
     shbytes1 &= 0x1fff;
     shbytes2 &= 0x1fff;
     shbytes3 &= 0x1fff;
@@ -1873,15 +892,15 @@ read_tmem_copy(struct rdp_state *wstate, int s, int s1, int s2, int s3, int t, u
     int tidx_a, tidx_blow, tidx_bhi, tidx_c, tidx_dlow, tidx_dhi;
 
     tbase <<= 4;
-    tidx_a = (tbase + shbytes) & 0x1fff;
+    tidx_a = (tbase + shbytes0) & 0x1fff;
     tidx_bhi = (tbase + shbytes1) & 0x1fff;
     tidx_c = (tbase + shbytes2) & 0x1fff;
     tidx_dhi = (tbase + shbytes3) & 0x1fff;
 
     if (tformat == FORMAT_YUV) {
-        delta = shbytes1 - shbytes;
+        int32_t delta = shbytes1 - shbytes0;
         tidx_blow = (tidx_a + (delta << 1)) & 0x1fff;
-        tidx_dlow = (tidx_blow + shbytes3 - shbytes) & 0x1fff;
+        tidx_dlow = (tidx_blow + shbytes3 - shbytes0) & 0x1fff;
     } else {
         tidx_blow = tidx_bhi;
         tidx_dlow = tidx_dhi;
@@ -1918,11 +937,13 @@ read_tmem_copy(struct rdp_state *wstate, int s, int s1, int s2, int s3, int t, u
     tidx_dlow >>= 2;
     tidx_dhi >>= 2;
 
+    uint32_t sortidx[8];
     sort_tmem_idx(&sortidx[0], tidx_a, tidx_blow, tidx_c, tidx_dlow, 0);
     sort_tmem_idx(&sortidx[1], tidx_a, tidx_blow, tidx_c, tidx_dlow, 1);
     sort_tmem_idx(&sortidx[2], tidx_a, tidx_blow, tidx_c, tidx_dlow, 2);
     sort_tmem_idx(&sortidx[3], tidx_a, tidx_blow, tidx_c, tidx_dlow, 3);
 
+    // Get low TMEM sample
     short0 = tmem16[sortidx[0] ^ WORD_ADDR_XOR];
     short1 = tmem16[sortidx[1] ^ WORD_ADDR_XOR];
     short2 = tmem16[sortidx[2] ^ WORD_ADDR_XOR];
@@ -1940,7 +961,7 @@ read_tmem_copy(struct rdp_state *wstate, int s, int s1, int s2, int s3, int t, u
         compute_color_index(wstate, &short2, sortshort[2], lowbits[3] & 3, tilenum);
         compute_color_index(wstate, &short3, sortshort[3], lowbits[4] & 3, tilenum);
 
-        sortidx[4] = (short0 << 2);
+        sortidx[4] = (short0 << 2) | 0;
         sortidx[5] = (short1 << 2) | 1;
         sortidx[6] = (short2 << 2) | 2;
         sortidx[7] = (short3 << 2) | 3;
@@ -1951,6 +972,7 @@ read_tmem_copy(struct rdp_state *wstate, int s, int s1, int s2, int s3, int t, u
         sort_tmem_idx(&sortidx[7], tidx_a, tidx_bhi, tidx_c, tidx_dhi, 3);
     }
 
+    // Get high TMEM sample
     short0 = tmem16[(sortidx[4] | 0x400) ^ WORD_ADDR_XOR];
     short1 = tmem16[(sortidx[5] | 0x400) ^ WORD_ADDR_XOR];
     short2 = tmem16[(sortidx[6] | 0x400) ^ WORD_ADDR_XOR];
@@ -1972,9 +994,9 @@ read_tmem_copy(struct rdp_state *wstate, int s, int s1, int s2, int s3, int t, u
 static void
 tmem_init_lut(void)
 {
-    int i;
-    for (i = 0; i < 32; i++)
-        replicated_rgba[i] = (uint8_t)((i << 3) | ((i >> 2) & 7));
+    // For expanding RGBA16 to RGBA32
+    for (int i = 0; i < 32; i++)
+        replicated_rgba[i] = (i << 3) | (i >> 2);
 }
 
 #endif // N64VIDEO_C

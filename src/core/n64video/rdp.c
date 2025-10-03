@@ -29,6 +29,12 @@
 #define FORMAT_IA   3
 #define FORMAT_I    4
 
+#define TLUT_RGBA16 0
+#define TLUT_IA16   1
+
+#define Z_SRC_PIXEL 0
+#define Z_SRC_PRIM  1
+
 #define TEXEL_RGBA4  0
 #define TEXEL_RGBA8  1
 #define TEXEL_RGBA16 2
