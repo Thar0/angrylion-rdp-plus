@@ -193,7 +193,7 @@ rejected_hbwrite_1cycle(struct rdp_state *wstate, int cdith, uint32_t blend_en, 
             else {
                 wstate->inv_pixel_color.a = (~(*wstate->blender1b_a[0])) & 0xff;
 
-                blender_equation_cycle0_gval(wstate, &g);
+                g = blender_equation_cycle_gval(wstate, 0);
             }
         } else
             g = *wstate->blender2a_g[0];
@@ -263,7 +263,7 @@ rejected_hbwrite_2cycle(struct rdp_state *wstate, int cdith, uint32_t blend_en, 
             else {
                 wstate->inv_pixel_color.a = (~(*wstate->blender1b_a[1])) & 0xff;
 
-                blender_equation_cycle1_gval(wstate, &g);
+                g = blender_equation_cycle_gval(wstate, 1);
             }
         } else
             g = *wstate->blender2a_g[1];
@@ -478,10 +478,14 @@ render_spans_1cycle_complete(struct rdp_state *wstate, int start, int end, int t
                                 curpixel_memcvg);
 
                 if (wen)
-                    wen = blender_1cycle(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap, curpixel_cvg,
-                                         curpixel_cvbit);
+                    wen = alpha_compare(wstate, wstate->pixel_color.a);
+
+                if (wen)
+                    wen = wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit;
 
                 if (wen) {
+                    blender_finalstage(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap,
+                                       wstate->other_modes.f.partialreject_1cycle, 0);
                     wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
                                         &delayedhbwidx);
                     if (wstate->other_modes.z_update_en)
@@ -650,10 +654,14 @@ render_spans_1cycle_notexel1(struct rdp_state *wstate, int start, int end, int t
                                 curpixel_memcvg);
 
                 if (wen)
-                    wen = blender_1cycle(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap, curpixel_cvg,
-                                         curpixel_cvbit);
+                    wen = alpha_compare(wstate, wstate->pixel_color.a);
+
+                if (wen)
+                    wen = wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit;
 
                 if (wen) {
+                    blender_finalstage(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap,
+                                       wstate->other_modes.f.partialreject_1cycle, 0);
                     wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
                                         &delayedhbwidx);
                     if (wstate->other_modes.z_update_en)
@@ -793,10 +801,14 @@ render_spans_1cycle_notex(struct rdp_state *wstate, int start, int end, int tile
                                 curpixel_memcvg);
 
                 if (wen)
-                    wen = blender_1cycle(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap, curpixel_cvg,
-                                         curpixel_cvbit);
+                    wen = alpha_compare(wstate, wstate->pixel_color.a);
+
+                if (wen)
+                    wen = wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit;
 
                 if (wen) {
+                    blender_finalstage(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap,
+                                       wstate->other_modes.f.partialreject_1cycle, 0);
                     wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
                                         &delayedhbwidx);
                     if (wstate->other_modes.z_update_en)
@@ -1006,7 +1018,10 @@ render_spans_2cycle_complete(struct rdp_state *wstate, int start, int end, int t
                                 curpixel_memcvg);
 
                 if (wen)
-                    wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
+                    wen = wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit;
+
+                if (wen)
+                    blender_2cycle_cycle0(wstate);
 
                 if (!wen && i >= wstate->last_overwriting_scanline)
                     blender_2cycle_cycle0_gval(wstate, curpixel);
@@ -1040,7 +1055,8 @@ render_spans_2cycle_complete(struct rdp_state *wstate, int start, int end, int t
                     wen = alpha_compare(wstate, acalpha);
 
                 if (wen) {
-                    blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
+                    blender_finalstage(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap,
+                                       wstate->other_modes.f.partialreject_2cycle, 1);
                     wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
                                         &delayedhbwidx);
                     if (wstate->other_modes.z_update_en)
@@ -1212,7 +1228,10 @@ render_spans_2cycle_notexelnext(struct rdp_state *wstate, int start, int end, in
                                 curpixel_memcvg);
 
                 if (wen)
-                    wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
+                    wen = wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit;
+
+                if (wen)
+                    blender_2cycle_cycle0(wstate);
 
                 if (!wen && i >= wstate->last_overwriting_scanline)
                     blender_2cycle_cycle0_gval(wstate, curpixel);
@@ -1256,7 +1275,8 @@ render_spans_2cycle_notexelnext(struct rdp_state *wstate, int start, int end, in
                     wen = alpha_compare(wstate, acalpha);
 
                 if (wen) {
-                    blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
+                    blender_finalstage(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap,
+                                       wstate->other_modes.f.partialreject_2cycle, 1);
                     wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
                                         &delayedhbwidx);
                     if (wstate->other_modes.z_update_en)
@@ -1425,7 +1445,10 @@ render_spans_2cycle_notexel1(struct rdp_state *wstate, int start, int end, int t
                                 curpixel_memcvg);
 
                 if (wen)
-                    wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
+                    wen = wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit;
+
+                if (wen)
+                    blender_2cycle_cycle0(wstate);
 
                 if (!wen && i >= wstate->last_overwriting_scanline)
                     blender_2cycle_cycle0_gval(wstate, curpixel);
@@ -1467,7 +1490,8 @@ render_spans_2cycle_notexel1(struct rdp_state *wstate, int start, int end, int t
                     wen = alpha_compare(wstate, acalpha);
 
                 if (wen) {
-                    blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
+                    blender_finalstage(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap,
+                                       wstate->other_modes.f.partialreject_2cycle, 1);
                     wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
                                         &delayedhbwidx);
                     if (wstate->other_modes.z_update_en)
@@ -1613,7 +1637,10 @@ render_spans_2cycle_notex(struct rdp_state *wstate, int start, int end, int tile
                                 curpixel_memcvg);
 
                 if (wen)
-                    wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
+                    wen = wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit;
+
+                if (wen)
+                    blender_2cycle_cycle0(wstate);
 
                 if (!wen && i >= wstate->last_overwriting_scanline)
                     blender_2cycle_cycle0_gval(wstate, curpixel);
@@ -1643,7 +1670,8 @@ render_spans_2cycle_notex(struct rdp_state *wstate, int start, int end, int tile
                     wen = alpha_compare(wstate, acalpha);
 
                 if (wen) {
-                    blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
+                    blender_finalstage(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap,
+                                       wstate->other_modes.f.partialreject_2cycle, 1);
                     wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
                                         &delayedhbwidx);
                     if (wstate->other_modes.z_update_en)

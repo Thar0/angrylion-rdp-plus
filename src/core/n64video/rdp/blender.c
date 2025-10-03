@@ -4,320 +4,132 @@ static int32_t blenderone = 0xff;
 
 static uint8_t bldiv_hwaccurate_table[0x8000];
 
+#define BL_RGB_IN  0
+#define BL_RGB_MEM 1
+#define BL_RGB_BL  2
+#define BL_RGB_FOG 3
+
+#define BL_A_IN    0
+#define BL_A_FOG   1
+#define BL_A_SHADE 2
+#define BL_A_0     3
+
+#define BL_A_1MA 0
+#define BL_A_MEM 1
+#define BL_A_1   2
+
 static INLINE void
 set_blender_input(struct rdp_state *wstate, int cycle, int which, int32_t **input_r, int32_t **input_g,
                   int32_t **input_b, int32_t **input_a, int a, int b)
 {
+    // In the first cycle, RGB_IN comes from the final combiner stage.
+    // In the second cycle, it comes from the first blender cycle
+    struct color *cycle_color = (cycle == 0) ? &wstate->pixel_color : &wstate->blended_pixel_color;
 
-    switch (a & 0x3) {
-        case 0:
-            {
-                if (cycle == 0) {
-                    *input_r = &wstate->pixel_color.r;
-                    *input_g = &wstate->pixel_color.g;
-                    *input_b = &wstate->pixel_color.b;
-                } else {
-                    *input_r = &wstate->blended_pixel_color.r;
-                    *input_g = &wstate->blended_pixel_color.g;
-                    *input_b = &wstate->blended_pixel_color.b;
-                }
-                break;
-            }
-
-        case 1:
-            {
-                *input_r = &wstate->memory_color.r;
-                *input_g = &wstate->memory_color.g;
-                *input_b = &wstate->memory_color.b;
-                break;
-            }
-
-        case 2:
-            {
-                *input_r = &wstate->blend_color.r;
-                *input_g = &wstate->blend_color.g;
-                *input_b = &wstate->blend_color.b;
-                break;
-            }
-
-        case 3:
-            {
-                *input_r = &wstate->fog_color.r;
-                *input_g = &wstate->fog_color.g;
-                *input_b = &wstate->fog_color.b;
-                break;
-            }
+    // Select color input, same for p or m
+    switch (a & 3) {
+        case BL_RGB_IN:
+            *input_r = &cycle_color->r;
+            *input_g = &cycle_color->g;
+            *input_b = &cycle_color->b;
+            break;
+        case BL_RGB_MEM:
+            *input_r = &wstate->memory_color.r;
+            *input_g = &wstate->memory_color.g;
+            *input_b = &wstate->memory_color.b;
+            break;
+        case BL_RGB_BL:
+            *input_r = &wstate->blend_color.r;
+            *input_g = &wstate->blend_color.g;
+            *input_b = &wstate->blend_color.b;
+            break;
+        case BL_RGB_FOG:
+            *input_r = &wstate->fog_color.r;
+            *input_g = &wstate->fog_color.g;
+            *input_b = &wstate->fog_color.b;
+            break;
     }
 
+    // Select alpha input, different for a or b
     if (which == 0) {
-        switch (b & 0x3) {
-            case 0:
-                *input_a = &wstate->pixel_color.a;
-                break;
-            case 1:
-                *input_a = &wstate->fog_color.a;
-                break;
-            case 2:
-                *input_a = &wstate->blender_shade_alpha;
-                break;
-            case 3:
-                *input_a = &zero_color;
-                break;
+        // clang-format off
+        switch (b & 3) {
+            case BL_A_IN:    *input_a = &wstate->pixel_color.a;       break;
+            case BL_A_FOG:   *input_a = &wstate->fog_color.a;         break;
+            case BL_A_SHADE: *input_a = &wstate->blender_shade_alpha; break;
+            case BL_A_0:     *input_a = &zero_color;                  break;
         }
+        // clang-format on
     } else {
-        switch (b & 0x3) {
-            case 0:
-                *input_a = &wstate->inv_pixel_color.a;
-                break;
-            case 1:
-                *input_a = &wstate->memory_color.a;
-                break;
-            case 2:
-                *input_a = &blenderone;
-                break;
-            case 3:
-                *input_a = &zero_color;
-                break;
+        // clang-format off
+        switch (b & 3) {
+            case BL_A_1MA: *input_a = &wstate->inv_pixel_color.a; break;
+            case BL_A_MEM: *input_a = &wstate->memory_color.a;    break;
+            case BL_A_1:   *input_a = &blenderone;                break;
+            case BL_A_0:   *input_a = &zero_color;                break;
         }
+        // clang-format on
     }
 }
 
+/**
+ * Compute alpha compare result.
+ */
 static STRICTINLINE int
 alpha_compare(struct rdp_state *wstate, int32_t comb_alpha)
 {
     int32_t threshold;
+
+    // Always pass when alpha compare is disabled
     if (!wstate->other_modes.alpha_compare_en)
         return 1;
-    else {
-        if (!wstate->other_modes.dither_alpha_en)
-            threshold = wstate->blend_color.a;
-        else
-            threshold = irand(&wstate->rseed) & 0xff;
 
-        if (comb_alpha >= threshold)
-            return 1;
-        else
-            return 0;
-    }
+    // Select source to compare to
+    //  - dither    = random
+    //  - no dither = blend color register alpha
+    if (wstate->other_modes.dither_alpha_en)
+        threshold = irand(&wstate->rseed) & 0xff;
+    else
+        threshold = wstate->blend_color.a;
+
+    // If pixel alpha is >= comparison, this pixel passes
+    return comb_alpha >= threshold;
 }
 
-static STRICTINLINE void
-blender_equation_cycle0(struct rdp_state *wstate, int *r, int *g, int *b)
-{
-    int blend1a, blend2a;
-    int blr, blg, blb, sum;
-    blend1a = *wstate->blender1b_a[0] >> 3;
-    blend2a = *wstate->blender2b_a[0] >> 3;
-
-    int mulb;
-
-    if (wstate->blender2b_a[0] == &wstate->memory_color.a) {
-        blend1a = (blend1a >> wstate->blshifta) & 0x3C;
-        blend2a = (blend2a >> wstate->blshiftb) | 3;
-    }
-
-    mulb = blend2a + 1;
-
-    blr = (*wstate->blender1a_r[0]) * blend1a + (*wstate->blender2a_r[0]) * mulb;
-    blg = (*wstate->blender1a_g[0]) * blend1a + (*wstate->blender2a_g[0]) * mulb;
-    blb = (*wstate->blender1a_b[0]) * blend1a + (*wstate->blender2a_b[0]) * mulb;
-
-    if (!wstate->other_modes.force_blend) {
-
-        sum = ((blend1a & ~3) + (blend2a & ~3) + 4) << 9;
-        *r = bldiv_hwaccurate_table[sum | ((blr >> 2) & 0x7ff)];
-        *g = bldiv_hwaccurate_table[sum | ((blg >> 2) & 0x7ff)];
-        *b = bldiv_hwaccurate_table[sum | ((blb >> 2) & 0x7ff)];
-    } else {
-        *r = (blr >> 5) & 0xff;
-        *g = (blg >> 5) & 0xff;
-        *b = (blb >> 5) & 0xff;
-    }
-}
-
-static STRICTINLINE void
-blender_equation_cycle0_gval(struct rdp_state *wstate, int *g)
-{
-    int blend1a, blend2a;
-    int blg, sum;
-    blend1a = *wstate->blender1b_a[0] >> 3;
-    blend2a = *wstate->blender2b_a[0] >> 3;
-
-    int mulb;
-    if (wstate->blender2b_a[0] == &wstate->memory_color.a) {
-        blend1a = (blend1a >> wstate->blshifta) & 0x3C;
-        blend2a = (blend2a >> wstate->blshiftb) | 3;
-    }
-
-    mulb = blend2a + 1;
-
-    blg = (*wstate->blender1a_g[0]) * blend1a + (*wstate->blender2a_g[0]) * mulb;
-
-    if (!wstate->other_modes.force_blend) {
-        sum = ((blend1a & ~3) + (blend2a & ~3) + 4) << 9;
-        *g = bldiv_hwaccurate_table[sum | ((blg >> 2) & 0x7ff)];
-    } else
-        *g = (blg >> 5) & 0xff;
-}
-
-static STRICTINLINE void
-blender_equation_cycle0_2(struct rdp_state *wstate, int *r, int *g, int *b)
-{
-    int blend1a, blend2a;
-    blend1a = *wstate->blender1b_a[0] >> 3;
-    blend2a = *wstate->blender2b_a[0] >> 3;
-
-    if (wstate->blender2b_a[0] == &wstate->memory_color.a) {
-        blend1a = (blend1a >> wstate->pastblshifta) & 0x3C;
-        blend2a = (blend2a >> wstate->pastblshiftb) | 3;
-    }
-
-    blend2a += 1;
-    *r = (((*wstate->blender1a_r[0]) * blend1a + (*wstate->blender2a_r[0]) * blend2a) >> 5) & 0xff;
-    *g = (((*wstate->blender1a_g[0]) * blend1a + (*wstate->blender2a_g[0]) * blend2a) >> 5) & 0xff;
-    *b = (((*wstate->blender1a_b[0]) * blend1a + (*wstate->blender2a_b[0]) * blend2a) >> 5) & 0xff;
-}
-
-static STRICTINLINE void
-blender_equation_cycle0_2_gval(struct rdp_state *wstate, int *g)
-{
-    int blend1a, blend2a;
-    blend1a = *wstate->blender1b_a[0] >> 3;
-    blend2a = *wstate->blender2b_a[0] >> 3;
-
-    if (wstate->blender2b_a[0] == &wstate->memory_color.a) {
-        blend1a = (blend1a >> wstate->pastblshifta) & 0x3C;
-        blend2a = (blend2a >> wstate->pastblshiftb) | 3;
-    }
-
-    blend2a += 1;
-    *g = (((*wstate->blender1a_g[0]) * blend1a + (*wstate->blender2a_g[0]) * blend2a) >> 5) & 0xff;
-}
-
-static STRICTINLINE void
-blender_equation_cycle1(struct rdp_state *wstate, int *r, int *g, int *b)
-{
-    int blend1a, blend2a;
-    int blr, blg, blb, sum;
-    blend1a = *wstate->blender1b_a[1] >> 3;
-    blend2a = *wstate->blender2b_a[1] >> 3;
-
-    int mulb;
-    if (wstate->blender2b_a[1] == &wstate->memory_color.a) {
-        blend1a = (blend1a >> wstate->blshifta) & 0x3C;
-        blend2a = (blend2a >> wstate->blshiftb) | 3;
-    }
-
-    mulb = blend2a + 1;
-    blr = (*wstate->blender1a_r[1]) * blend1a + (*wstate->blender2a_r[1]) * mulb;
-    blg = (*wstate->blender1a_g[1]) * blend1a + (*wstate->blender2a_g[1]) * mulb;
-    blb = (*wstate->blender1a_b[1]) * blend1a + (*wstate->blender2a_b[1]) * mulb;
-
-    if (!wstate->other_modes.force_blend) {
-        sum = ((blend1a & ~3) + (blend2a & ~3) + 4) << 9;
-        *r = bldiv_hwaccurate_table[sum | ((blr >> 2) & 0x7ff)];
-        *g = bldiv_hwaccurate_table[sum | ((blg >> 2) & 0x7ff)];
-        *b = bldiv_hwaccurate_table[sum | ((blb >> 2) & 0x7ff)];
-    } else {
-        *r = (blr >> 5) & 0xff;
-        *g = (blg >> 5) & 0xff;
-        *b = (blb >> 5) & 0xff;
-    }
-}
-
-static STRICTINLINE void
-blender_equation_cycle1_gval(struct rdp_state *wstate, int *g)
-{
-    int blend1a, blend2a;
-    int blg, sum;
-    blend1a = *wstate->blender1b_a[1] >> 3;
-    blend2a = *wstate->blender2b_a[1] >> 3;
-
-    int mulb;
-    if (wstate->blender2b_a[1] == &wstate->memory_color.a) {
-        blend1a = (blend1a >> wstate->blshifta) & 0x3C;
-        blend2a = (blend2a >> wstate->blshiftb) | 3;
-    }
-
-    mulb = blend2a + 1;
-    blg = (*wstate->blender1a_g[1]) * blend1a + (*wstate->blender2a_g[1]) * mulb;
-
-    if (!wstate->other_modes.force_blend) {
-        sum = ((blend1a & ~3) + (blend2a & ~3) + 4) << 9;
-        *g = bldiv_hwaccurate_table[sum | ((blg >> 2) & 0x7ff)];
-    } else
-        *g = (blg >> 5) & 0xff;
-}
-
+/**
+ * Blender output for the g channel only, in the final stage.
+ */
 static STRICTINLINE int
-blender_1cycle(struct rdp_state *wstate, uint32_t *fr, uint32_t *fg, uint32_t *fb, int dith, uint32_t blend_en,
-               uint32_t prewrap, uint32_t curpixel_cvg, uint32_t curpixel_cvbit)
+blender_equation_cycle_gval(struct rdp_state *wstate, int cycle)
 {
-    int r, g, b, dontblend;
-
-    if (alpha_compare(wstate, wstate->pixel_color.a)) {
-
-        if (wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit) {
-
-            if (!wstate->other_modes.color_on_cvg || prewrap) {
-                dontblend = (wstate->other_modes.f.partialreject_1cycle && wstate->pixel_color.a >= 0xff);
-                if (!blend_en || dontblend) {
-                    r = *wstate->blender1a_r[0];
-                    g = *wstate->blender1a_g[0];
-                    b = *wstate->blender1a_b[0];
-                } else {
-                    wstate->inv_pixel_color.a = (~(*wstate->blender1b_a[0])) & 0xff;
-
-                    blender_equation_cycle0(wstate, &r, &g, &b);
-                }
-            } else {
-                r = *wstate->blender2a_r[0];
-                g = *wstate->blender2a_g[0];
-                b = *wstate->blender2a_b[0];
-            }
-
-            if (wstate->other_modes.rgb_dither_sel != 3)
-                rgb_dither(wstate->other_modes.rgb_dither_sel, &r, &g, &b, dith);
-
-            *fr = r;
-            *fg = g;
-            *fb = b;
-            return 1;
-        } else
-            return 0;
-    } else
-        return 0;
-}
-
-static STRICTINLINE int
-blender_2cycle_cycle0(struct rdp_state *wstate, uint32_t curpixel_cvg, uint32_t curpixel_cvbit)
-{
-    int r, g, b;
-    int wen = (wstate->other_modes.antialias_en ? curpixel_cvg : curpixel_cvbit) > 0 ? 1 : 0;
-
-    if (wen) {
-        wstate->inv_pixel_color.a = (~(*wstate->blender1b_a[0])) & 0xff;
-
-        blender_equation_cycle0_2(wstate, &r, &g, &b);
-
-        wstate->blended_pixel_color.r = r;
-        wstate->blended_pixel_color.g = g;
-        wstate->blended_pixel_color.b = b;
+    int blend1a = *wstate->blender1b_a[cycle] >> 3;
+    int blend2a = *wstate->blender2b_a[cycle] >> 3;
+    if (wstate->blender2b_a[cycle] == &wstate->memory_color.a) {
+        blend1a = (blend1a >> wstate->blshifta) & 0x3C;
+        blend2a = (blend2a >> wstate->blshiftb) | 3;
     }
 
-    return wen;
+    int mulb = blend2a + 1;
+    int blg = (*wstate->blender1a_g[cycle]) * blend1a + (*wstate->blender2a_g[cycle]) * mulb;
+
+    if (wstate->other_modes.force_blend) {
+        return blg >> 5 & 0xff;
+    } else {
+        int sum = ((blend1a & ~3) + (blend2a & ~3) + 4) << 9;
+        return bldiv_hwaccurate_table[sum | ((blg >> 2) & 0x7ff)];
+    }
 }
 
+/**
+ * Blender output for the first cycle, g channel only.
+ */
 static STRICTINLINE void
 blender_2cycle_cycle0_gval(struct rdp_state *wstate, uint32_t curpixel)
 {
-    int g, fbsel;
-    uint32_t fb;
-
-    fbsel = wstate->fb_size;
+    int fbsel = wstate->fb_size;
 
     if (wstate->fb_size == PIXEL_SIZE_8BIT) {
-        fb = wstate->fb_address + curpixel;
+        uint32_t fb = wstate->fb_address + curpixel;
         if (!(fb & 1))
             fbsel--;
     }
@@ -325,34 +137,76 @@ blender_2cycle_cycle0_gval(struct rdp_state *wstate, uint32_t curpixel)
     if (fbsel & 1) {
         wstate->inv_pixel_color.a = (~(*wstate->blender1b_a[0])) & 0xff;
 
-        blender_equation_cycle0_2_gval(wstate, &g);
+        int blend1a = *wstate->blender1b_a[0] >> 3;
+        int blend2a = *wstate->blender2b_a[0] >> 3;
+        if (wstate->blender2b_a[0] == &wstate->memory_color.a) {
+            blend1a = (blend1a >> wstate->pastblshifta) & 0x3C;
+            blend2a = (blend2a >> wstate->pastblshiftb) | 3;
+        }
 
-        wstate->blended_pixel_color.g = g;
+        int mulb = blend2a + 1;
+        int g = (*wstate->blender1a_g[0]) * blend1a + (*wstate->blender2a_g[0]) * mulb;
+
+        wstate->blended_pixel_color.g = g >> 5 & 0xff;
     }
 }
 
+/**
+ * Blender final stage.
+ * Second cycle for 2-cycle mode, or only cycle of 1-cycle mode.
+ */
 static STRICTINLINE void
-blender_2cycle_cycle1(struct rdp_state *wstate, uint32_t *fr, uint32_t *fg, uint32_t *fb, int dith, uint32_t blend_en,
-                      uint32_t prewrap)
+blender_finalstage(struct rdp_state *wstate, uint32_t *fr, uint32_t *fg, uint32_t *fb, int dith, uint32_t blend_en,
+                   uint32_t prewrap, bool partialreject, bool cycle)
 {
-    int r, g, b, dontblend;
+    int r, g, b;
 
+    // Prewrap is whether coverage overflowed
     if (!wstate->other_modes.color_on_cvg || prewrap) {
-        dontblend = (wstate->other_modes.f.partialreject_2cycle && wstate->pixel_color.a >= 0xff);
-        if (!blend_en || dontblend) {
-            r = *wstate->blender1a_r[1];
-            g = *wstate->blender1a_g[1];
-            b = *wstate->blender1a_b[1];
+        // Either color_on_cvg is disabled or coverage overflowed, perform blending
+        if (!blend_en || (partialreject && wstate->pixel_color.a >= 0xff)) {
+            // Blender disabled or formula is trivial, take 1A input as-is
+            r = *wstate->blender1a_r[cycle];
+            g = *wstate->blender1a_g[cycle];
+            b = *wstate->blender1a_b[cycle];
         } else {
-            wstate->inv_pixel_color.a = (~(*wstate->blender1b_a[1])) & 0xff;
-            blender_equation_cycle1(wstate, &r, &g, &b);
+            // Compute value for "1 - Alpha" input
+            // Notice that it inverts the selected input, it is not fixed to pixel alpha
+            wstate->inv_pixel_color.a = (~(*wstate->blender1b_a[cycle])) & 0xff;
+
+            // Run the blending formula
+
+            int blend1a = *wstate->blender1b_a[cycle] >> 3;
+            int blend2a = *wstate->blender2b_a[cycle] >> 3;
+            if (wstate->blender2b_a[cycle] == &wstate->memory_color.a) {
+                blend1a = (blend1a >> wstate->blshifta) & 0x3C;
+                blend2a = (blend2a >> wstate->blshiftb) | 3;
+            }
+
+            int mulb = blend2a + 1;
+            int blr = (*wstate->blender1a_r[cycle]) * blend1a + (*wstate->blender2a_r[cycle]) * mulb;
+            int blg = (*wstate->blender1a_g[cycle]) * blend1a + (*wstate->blender2a_g[cycle]) * mulb;
+            int blb = (*wstate->blender1a_b[cycle]) * blend1a + (*wstate->blender2a_b[cycle]) * mulb;
+
+            if (wstate->other_modes.force_blend) {
+                r = blr >> 5 & 0xff;
+                g = blg >> 5 & 0xff;
+                b = blb >> 5 & 0xff;
+            } else {
+                int sum = ((blend1a & ~3) + (blend2a & ~3) + 4) << 9;
+                r = bldiv_hwaccurate_table[sum | ((blr >> 2) & 0x7ff)];
+                g = bldiv_hwaccurate_table[sum | ((blg >> 2) & 0x7ff)];
+                b = bldiv_hwaccurate_table[sum | ((blb >> 2) & 0x7ff)];
+            }
         }
     } else {
-        r = *wstate->blender2a_r[1];
-        g = *wstate->blender2a_g[1];
-        b = *wstate->blender2a_b[1];
+        // Take blender 2A input as-is for color-on-cvg when no overflow took place
+        r = *wstate->blender2a_r[cycle];
+        g = *wstate->blender2a_g[cycle];
+        b = *wstate->blender2a_b[cycle];
     }
 
+    // Apply dither
     if (wstate->other_modes.rgb_dither_sel != 3)
         rgb_dither(wstate->other_modes.rgb_dither_sel, &r, &g, &b, dith);
 
@@ -361,31 +215,72 @@ blender_2cycle_cycle1(struct rdp_state *wstate, uint32_t *fr, uint32_t *fg, uint
     *fb = b;
 }
 
+/**
+ * First cycle for 2-cycle mode
+ */
+static STRICTINLINE void
+blender_2cycle_cycle0(struct rdp_state *wstate)
+{
+    // Invert pixel alpha (for G_BL_A_IN input)
+    wstate->inv_pixel_color.a = (~(*wstate->blender1b_a[0])) & 0xff;
+
+    // Get alpha channel values from selected inputs, 5 most significant bits
+    int blend1a = *wstate->blender1b_a[0] >> 3;
+    int blend2a = *wstate->blender2b_a[0] >> 3;
+
+    // If memory coverage is used, shift the alpha inputs. This is for reducing punch-through
+    // artifacts by prioritizing blending of the surface with smaller dz.
+    // The shift will be anywhere from 0 to 4 depending on:
+    //  - the dz difference (if z_cmp && z_src_sel == PIXEL)
+    //  - saved dz (if !z_cmp && z_src_sel == PIXEL)
+    //  - prim dz (if z_src_sel == PRIM)
+    if (wstate->blender2b_a[0] == &wstate->memory_color.a) {
+        blend1a = (blend1a >> wstate->pastblshifta) & 0x3C;
+        blend2a = (blend2a >> wstate->pastblshiftb) | 3;
+    }
+
+    // Compute p * a + m * b
+    int mulb = blend2a + 1;
+    int r = (*wstate->blender1a_r[0]) * blend1a + (*wstate->blender2a_r[0]) * mulb;
+    int g = (*wstate->blender1a_g[0]) * blend1a + (*wstate->blender2a_g[0]) * mulb;
+    int b = (*wstate->blender1a_b[0]) * blend1a + (*wstate->blender2a_b[0]) * mulb;
+    // Since p and m are 0.8 fixed point and a and b are 0.5 and 1.5 respectively,
+    // the result is a 13-bit value. We want an 8 bit result, so take the 8 most
+    // significant bits and ignore the 5 least significant bits.
+    wstate->blended_pixel_color.r = r >> 5 & 0xff;
+    wstate->blended_pixel_color.g = g >> 5 & 0xff;
+    wstate->blended_pixel_color.b = b >> 5 & 0xff;
+}
+
 static void
 blender_init_lut(void)
 {
-    int i, k;
-    int d = 0, n = 0, temp = 0, res = 0, invd = 0, nbit = 0;
-    int ps[9];
-    for (i = 0; i < 0x8000; i++) {
-        res = 0;
-        d = (i >> 11) & 0xf;
-        n = i & 0x7ff;
-        invd = (~d) & 0xf;
+    // Precomputes values for the fixed-point division of an
+    // q0.11 number and a q1.3 number
 
-        temp = invd + (n >> 8) + 1;
+    for (int i = 0; i < 0x8000; i++) {
+        uint8_t quotient = 0;
+        int dividend = i & 0x7ff;      // 0.11 fixed point
+        int divisor = (i >> 11) & 0xf; // 1.3 fixed point
+        int inv_divisor = (~divisor) & 0xf;
+
+        int temp = inv_divisor + (dividend >> 8) + 1;
+        int ps[9];
         ps[0] = temp & 7;
-        for (k = 0; k < 8; k++) {
-            nbit = (n >> (7 - k)) & 1;
-            if (res & (0x100 >> k))
-                temp = invd + (ps[k] << 1) + nbit + 1;
+
+        for (int k = 0; k < 8; k++) {
+            int nbit = (dividend >> (7 - k)) & 1;
+
+            if (quotient & (0x100 >> k))
+                temp = inv_divisor + (ps[k] << 1) + nbit + 1;
             else
-                temp = d + (ps[k] << 1) + nbit;
+                temp = divisor + (ps[k] << 1) + nbit + 0;
+
             ps[k + 1] = temp & 7;
             if (temp & 0x10)
-                res |= (1 << (7 - k));
+                quotient |= (1 << (7 - k));
         }
-        bldiv_hwaccurate_table[i] = (uint8_t)res;
+        bldiv_hwaccurate_table[i] = quotient;
     }
 }
 
