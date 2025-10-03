@@ -12,15 +12,18 @@
 #define RREADADDR8(rdst, in)            \
     {                                   \
         (rdst) = rdram_read_idx8((in)); \
-    }(void)0
+    }                                   \
+    (void)0
 #define RREADIDX16(rdst, in)             \
     {                                    \
         (rdst) = rdram_read_idx16((in)); \
-    }(void)0
+    }                                    \
+    (void)0
 #define RREADIDX32(rdst, in)             \
     {                                    \
         (rdst) = rdram_read_idx32((in)); \
-    }(void)0
+    }                                    \
+    (void)0
 
 #define RWRITEADDR8(in, val) rdram_write_idx8((in), (val))
 #define RWRITEIDX16(in, val) rdram_write_idx16((in), (val))

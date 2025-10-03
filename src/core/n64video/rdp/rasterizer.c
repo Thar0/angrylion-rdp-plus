@@ -2061,7 +2061,8 @@ edgewalker_for_prims(struct rdp_state *wstate, uint32_t *ewdata)
         wstate->span[j].b = ((b & ~0x1ff) + dbdiff - (xfrac * dbdxh)) & ~0x3ff; \
         wstate->span[j].a = ((a & ~0x1ff) + dadiff - (xfrac * dadxh)) & ~0x3ff; \
         wstate->span[j].z = ((z & ~0x1ff) + dzdiff - (xfrac * dzdxh)) & ~0x3ff; \
-    }(void)0
+    }                                                                           \
+    (void)0
 
 #define ADDVALUES_PRIM() \
     {                    \
@@ -2073,7 +2074,8 @@ edgewalker_for_prims(struct rdp_state *wstate, uint32_t *ewdata)
         b += dbde;       \
         a += dade;       \
         z += dzde;       \
-    }(void)0
+    }                    \
+    (void)0
 
     int32_t maxxmx = 0, minxmx = 0, maxxhx = 0, minxhx = 0;
 

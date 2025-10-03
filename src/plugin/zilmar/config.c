@@ -112,7 +112,8 @@ config_dialog_proc(HWND hwnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
                 };
 
                 dlg_combo_vi_interp = GetDlgItem(hwnd, IDC_COMBO_VI_INTERP);
-                config_dialog_fill_combo(dlg_combo_vi_interp, vi_interp_strings, VI_INTERP_NUM, (uint32_t)config.vi.interp);
+                config_dialog_fill_combo(dlg_combo_vi_interp, vi_interp_strings, VI_INTERP_NUM,
+                                         (uint32_t)config.vi.interp);
 
                 char *dp_compat_strings[] = {
                     "Fast, most glitches",     // DP_COMPAT_LOW
@@ -121,7 +122,8 @@ config_dialog_proc(HWND hwnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
                 };
 
                 dlg_combo_dp_compat = GetDlgItem(hwnd, IDC_COMBO_DP_COMPAT);
-                config_dialog_fill_combo(dlg_combo_dp_compat, dp_compat_strings, DP_COMPAT_NUM, (uint32_t)config.dp.compat);
+                config_dialog_fill_combo(dlg_combo_dp_compat, dp_compat_strings, DP_COMPAT_NUM,
+                                         (uint32_t)config.dp.compat);
 
                 CONFIG_DLG_INIT_CHECKBOX(IDC_CHECK_MULTITHREAD, dlg_check_multithread, config.parallel);
                 CONFIG_DLG_INIT_CHECKBOX(IDC_CHECK_VI_WIDESCREEN, dlg_check_vi_widescreen, config.vi.widescreen);

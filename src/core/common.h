@@ -34,7 +34,7 @@
 #endif
 
 #define FALLTHROUGH __attribute__((fallthrough))
-#define NORETURN __attribute__((noreturn))
+#define NORETURN    __attribute__((noreturn))
 
 // misc
 #define UNUSED(x) (void)(x)

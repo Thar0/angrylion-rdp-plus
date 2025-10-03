@@ -205,7 +205,7 @@ screen_adjust(int32_t width_out, int32_t height_out, int32_t *width, int32_t *he
     int32_t win_x = 0;
     int32_t win_y = statusrect.bottom;
 
-#if 0   // TODO figure out what was meant here, the condition is always false
+#if 0 // TODO figure out what was meant here, the condition is always false
     // adjust windowed size after the output size has changed so that
     // the output remains pixel-perfect until the user changes the window size
     if (win_width != win_width || win_height != win_height) {
@@ -227,7 +227,7 @@ screen_adjust(int32_t width_out, int32_t height_out, int32_t *width, int32_t *he
             win32_client_resize(gfx.hWnd, gfx.hStatusBar, win_width_tmp, win_height_tmp);
         }
     }
-    #endif
+#endif
 
     *width = win_width;
     *height = win_height;
