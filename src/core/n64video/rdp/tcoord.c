@@ -1,18 +1,35 @@
 #ifdef N64VIDEO_C
 
+#define TCDIV_OVERFLOWED(tc) ((tc) & (3 << 17))
+
+// For perspective division
+// HW contains this in a ROM
 static const int32_t norm_point_table[64] = {
-    0x4000, 0x3f04, 0x3e10, 0x3d22, 0x3c3c, 0x3b5d, 0x3a83, 0x39b1, 0x38e4, 0x381c, 0x375a, 0x369d, 0x35e5,
-    0x3532, 0x3483, 0x33d9, 0x3333, 0x3291, 0x31f4, 0x3159, 0x30c3, 0x3030, 0x2fa1, 0x2f15, 0x2e8c, 0x2e06,
-    0x2d83, 0x2d03, 0x2c86, 0x2c0b, 0x2b93, 0x2b1e, 0x2aab, 0x2a3a, 0x29cc, 0x2960, 0x28f6, 0x288e, 0x2828,
-    0x27c4, 0x2762, 0x2702, 0x26a4, 0x2648, 0x25ed, 0x2594, 0x253d, 0x24e7, 0x2492, 0x243f, 0x23ee, 0x239e,
-    0x234f, 0x2302, 0x22b6, 0x226c, 0x2222, 0x21da, 0x2193, 0x214d, 0x2108, 0x20c5, 0x2082, 0x2041
+    // clang-format off
+    0x4000, 0x3F04, 0x3E10, 0x3D22, 0x3C3C, 0x3B5D, 0x3A83, 0x39B1,
+    0x38E4, 0x381C, 0x375A, 0x369D, 0x35E5, 0x3532, 0x3483, 0x33D9,
+    0x3333, 0x3291, 0x31F4, 0x3159, 0x30C3, 0x3030, 0x2FA1, 0x2F15,
+    0x2E8C, 0x2E06, 0x2D83, 0x2D03, 0x2C86, 0x2C0B, 0x2B93, 0x2B1E,
+    0x2AAB, 0x2A3A, 0x29CC, 0x2960, 0x28F6, 0x288E, 0x2828, 0x27C4,
+    0x2762, 0x2702, 0x26A4, 0x2648, 0x25ED, 0x2594, 0x253D, 0x24E7,
+    0x2492, 0x243F, 0x23EE, 0x239E, 0x234F, 0x2302, 0x22B6, 0x226C,
+    0x2222, 0x21DA, 0x2193, 0x214D, 0x2108, 0x20C5, 0x2082, 0x2041,
+    // clang-format on
 };
 
+// For perspective division
+// HW contains this in a ROM
 static const int32_t norm_slope_table[64] = {
-    0xf03, 0xf0b, 0xf11, 0xf19, 0xf20, 0xf25, 0xf2d, 0xf32, 0xf37, 0xf3d, 0xf42, 0xf47, 0xf4c, 0xf50, 0xf55, 0xf59,
-    0xf5d, 0xf62, 0xf64, 0xf69, 0xf6c, 0xf70, 0xf73, 0xf76, 0xf79, 0xf7c, 0xf7f, 0xf82, 0xf84, 0xf87, 0xf8a, 0xf8c,
-    0xf8e, 0xf91, 0xf93, 0xf95, 0xf97, 0xf99, 0xf9b, 0xf9d, 0xf9f, 0xfa1, 0xfa3, 0xfa4, 0xfa6, 0xfa8, 0xfa9, 0xfaa,
-    0xfac, 0xfae, 0xfaf, 0xfb0, 0xfb2, 0xfb3, 0xfb5, 0xfb5, 0xfb7, 0xfb8, 0xfb9, 0xfba, 0xfbc, 0xfbc, 0xfbe, 0xfbe
+    // clang-format off
+    0xF03, 0xF0B, 0xF11, 0xF19, 0xF20, 0xF25, 0xF2D, 0xF32,
+    0xF37, 0xF3D, 0xF42, 0xF47, 0xF4C, 0xF50, 0xF55, 0xF59,
+    0xF5D, 0xF62, 0xF64, 0xF69, 0xF6C, 0xF70, 0xF73, 0xF76,
+    0xF79, 0xF7C, 0xF7F, 0xF82, 0xF84, 0xF87, 0xF8A, 0xF8C,
+    0xF8E, 0xF91, 0xF93, 0xF95, 0xF97, 0xF99, 0xF9B, 0xF9D,
+    0xF9F, 0xFA1, 0xFA3, 0xFA4, 0xFA6, 0xFA8, 0xFA9, 0xFAA,
+    0xFAC, 0xFAE, 0xFAF, 0xFB0, 0xFB2, 0xFB3, 0xFB5, 0xFB5,
+    0xFB7, 0xFB8, 0xFB9, 0xFBA, 0xFBC, 0xFBC, 0xFBE, 0xFBE,
+    // clang-format on
 };
 
 static void
@@ -20,25 +37,26 @@ tcdiv_persp(int32_t ss, int32_t st, int32_t sw, int32_t *sss, int32_t *sst);
 static void
 tcdiv_nopersp(int32_t ss, int32_t st, int32_t sw, int32_t *sss, int32_t *sst);
 
-static void (*tcdiv_func[2])(int32_t, int32_t, int32_t, int32_t *, int32_t *) = { tcdiv_nopersp, tcdiv_persp };
+static void (*tcdiv_func[2])(int32_t, int32_t, int32_t, int32_t *, int32_t *) = {
+    tcdiv_nopersp,
+    tcdiv_persp,
+};
 
 static int32_t maskbits_table[16];
 static int32_t log2table[256];
 static int32_t tcdiv_table[0x8000];
 
 static STRICTINLINE void
-tcmask_copy(struct tile *tile, int32_t *S, int32_t *S1, int32_t *S2, int32_t *S3, int32_t *T)
+tcmask_copy(struct tile *tile, int32_t *S0, int32_t *S1, int32_t *S2, int32_t *S3, int32_t *T)
 {
     int32_t wrap;
-    int32_t maskbits_s;
-    int32_t swrapthreshold;
 
     if (tile->mask_s) {
         if (tile->ms) {
-            swrapthreshold = tile->f.masksclamped;
+            int32_t swrapthreshold = tile->f.masksclamped;
 
-            wrap = (*S >> swrapthreshold) & 1;
-            *S ^= (-wrap);
+            wrap = (*S0 >> swrapthreshold) & 1;
+            *S0 ^= (-wrap);
 
             wrap = (*S1 >> swrapthreshold) & 1;
             *S1 ^= (-wrap);
@@ -50,8 +68,8 @@ tcmask_copy(struct tile *tile, int32_t *S, int32_t *S1, int32_t *S2, int32_t *S3
             *S3 ^= (-wrap);
         }
 
-        maskbits_s = maskbits_table[tile->mask_s];
-        *S &= maskbits_s;
+        int32_t maskbits_s = maskbits_table[tile->mask_s];
+        *S0 &= maskbits_s;
         *S1 &= maskbits_s;
         *S2 &= maskbits_s;
         *S3 &= maskbits_s;
@@ -63,240 +81,167 @@ tcmask_copy(struct tile *tile, int32_t *S, int32_t *S1, int32_t *S2, int32_t *S3
             wrap &= 1;
             *T ^= (-wrap);
         }
-
         *T &= maskbits_table[tile->mask_t];
     }
 }
 
 static STRICTINLINE void
+tcshift_single(int32_t *C, int32_t *Cmax, int shift, uint16_t upperbound)
+{
+    int32_t coord = *C;
+
+    // Small shift values are right shifts while large shift values
+    // are right shifts by the inverse
+    if (shift < 11)
+        coord = SIGN16(coord) >> shift;
+    else
+        coord = SIGN16(coord << (16 - shift));
+
+    *C = coord;
+    *Cmax = (coord >> 3) >= upperbound;
+}
+
+static STRICTINLINE void
 tcshift_cycle(struct tile *tile, int32_t *S, int32_t *T, int32_t *maxs, int32_t *maxt)
 {
-
-    int32_t coord = *S;
-    int32_t shifter = tile->shift_s;
-
-    if (shifter < 11) {
-        coord = SIGN16(coord);
-        coord >>= shifter;
-    } else {
-        coord <<= (16 - shifter);
-        coord = SIGN16(coord);
-    }
-    *S = coord;
-
-    *maxs = ((coord >> 3) >= tile->sh);
-
-    coord = *T;
-    shifter = tile->shift_t;
-
-    if (shifter < 11) {
-        coord = SIGN16(coord);
-        coord >>= shifter;
-    } else {
-        coord <<= (16 - shifter);
-        coord = SIGN16(coord);
-    }
-    *T = coord;
-    *maxt = ((coord >> 3) >= tile->th);
-}
-
-static STRICTINLINE void
-tcclamp_cycle(struct tile *tile, int32_t *S, int32_t *T, int32_t *SFRAC, int32_t *TFRAC, int32_t maxs, int32_t maxt)
-{
-
-    int32_t locs = *S, loct = *T;
-    if (tile->f.clampens) {
-
-        if (maxs) {
-            *S = tile->f.clampdiffs;
-            *SFRAC = 0;
-        } else if (!(locs & 0x10000))
-            *S = locs >> 5;
-        else {
-            *S = 0;
-            *SFRAC = 0;
-        }
-    } else
-        *S = (locs >> 5);
-
-    if (tile->f.clampent) {
-        if (maxt) {
-            *T = tile->f.clampdifft;
-            *TFRAC = 0;
-        } else if (!(loct & 0x10000))
-            *T = loct >> 5;
-        else {
-            *T = 0;
-            *TFRAC = 0;
-        }
-    } else
-        *T = (loct >> 5);
-}
-
-static STRICTINLINE void
-tcclamp_cycle_light(struct tile *tile, int32_t *S, int32_t *T, int32_t maxs, int32_t maxt)
-{
-    int32_t locs = *S, loct = *T;
-    if (tile->f.clampens) {
-        if (maxs)
-            *S = tile->f.clampdiffs;
-        else if (!(locs & 0x10000))
-            *S = locs >> 5;
-        else
-            *S = 0;
-    } else
-        *S = (locs >> 5);
-
-    if (tile->f.clampent) {
-        if (maxt)
-            *T = tile->f.clampdifft;
-        else if (!(loct & 0x10000))
-            *T = loct >> 5;
-        else
-            *T = 0;
-    } else
-        *T = (loct >> 5);
+    tcshift_single(S, maxs, tile->shift_s, tile->sh);
+    tcshift_single(T, maxt, tile->shift_t, tile->th);
 }
 
 static STRICTINLINE void
 tcshift_copy(struct tile *tile, int32_t *S, int32_t *T)
 {
-    int32_t coord = *S;
-    int32_t shifter = tile->shift_s;
+    // Same as 1-cycle/2-cycle except the max check is not used
+    int32_t maxs, maxt;
+    tcshift_single(S, &maxs, tile->shift_s, tile->sh);
+    tcshift_single(T, &maxt, tile->shift_t, tile->th);
+}
 
-    if (shifter < 11) {
-        coord = SIGN16(coord);
-        coord >>= shifter;
+static STRICTINLINE void
+tcclamp_cycle_single(int clamp_en, int clamp_diff, int32_t *C, int32_t *CFRAC, int32_t max)
+{
+    if (!clamp_en)
+        return; // No clamping, nothing to do
+
+    if (max) { // >= lrs/lrt
+        // Positive clamp
+        *C = clamp_diff;
+        *CFRAC = 0;
+    } else if (*C & (1 << 11)) { // Negative
+        // Negative clamp
+        *C = 0;
+        *CFRAC = 0;
     } else {
-        coord <<= (16 - shifter);
-        coord = SIGN16(coord);
+        // Otherwise within bounds, nothing to do
     }
-    *S = coord;
+}
 
-    coord = *T;
-    shifter = tile->shift_t;
+static STRICTINLINE void
+tcclamp_cycle(struct tile *tile, int32_t *S, int32_t *T, int32_t *SFRAC, int32_t *TFRAC, int32_t maxs, int32_t maxt)
+{
+    tcclamp_cycle_single(tile->f.clampens, tile->f.clampdiffs, S, SFRAC, maxs);
+    tcclamp_cycle_single(tile->f.clampent, tile->f.clampdifft, T, TFRAC, maxt);
+}
 
-    if (shifter < 11) {
-        coord = SIGN16(coord);
-        coord >>= shifter;
-    } else {
-        coord <<= (16 - shifter);
-        coord = SIGN16(coord);
-    }
-    *T = coord;
+static STRICTINLINE void
+tcclamp_cycle_light(struct tile *tile, int32_t *S, int32_t *T, int32_t maxs, int32_t maxt)
+{
+    // Ignores fraction
+    int32_t FRAC;
+    tcclamp_cycle_single(tile->f.clampens, tile->f.clampdiffs, S, &FRAC, maxs);
+    tcclamp_cycle_single(tile->f.clampent, tile->f.clampdifft, T, &FRAC, maxt);
 }
 
 static STRICTINLINE void
 tclod_4x17_to_15(int32_t scurr, int32_t snext, int32_t tcurr, int32_t tnext, int32_t previous, int32_t *lod)
 {
-
+    // 17-bit subtraction
     int dels = SIGN(snext, 17) - SIGN(scurr, 17);
-    if (dels & 0x20000)
+    if (dels & 0x20000) // Almost abs() but 1-off for negative values
         dels = ~dels & 0x1ffff;
+
     int delt = SIGN(tnext, 17) - SIGN(tcurr, 17);
     if (delt & 0x20000)
         delt = ~delt & 0x1ffff;
 
-    dels = (dels > delt) ? dels : delt;
-    dels = (previous > dels) ? previous : dels;
-    *lod = dels & 0x7fff;
-    if (dels & 0x1c000)
-        *lod |= 0x4000;
+    // delmax = max(dels, delt, previous)
+    int delmax;
+    delmax = MAX(dels, delt);
+    delmax = MAX(previous, delmax);
+
+    // lod is essentially max(|dsdx|, |dtdy|)
+
+    int lod_out = delmax & 0x7fff; // 15 bits (signed 14-bit ?)
+    if (delmax & 0x1C000)          // Top 3 bits of the 17-bit value set
+        lod_out |= 0x4000;         // Set bit 14 (sign bit, or very distant?)
+
+    // 15-bit
+    *lod = lod_out;
+}
+
+static STRICTINLINE int32_t
+tclod_tcclamp_single(int32_t tc)
+{
+    if (tc & (2 << 17))
+        return 0x7fff;
+    if (tc & (1 << 17))
+        return 0x8000;
+
+    int32_t tcmasked = tc & 0x18000;
+
+    if (tcmasked == 0x8000)
+        return 0x7fff;
+    if (tcmasked == 0x10000)
+        return 0x8000;
+
+    return tc & 0xffff;
 }
 
 static STRICTINLINE void
 tclod_tcclamp(int32_t *sss, int32_t *sst)
 {
-    int32_t tempanded, temps = *sss, tempt = *sst;
-
-    if (!(temps & 0x40000)) {
-        if (!(temps & 0x20000)) {
-            tempanded = temps & 0x18000;
-            if (tempanded != 0x8000) {
-                if (tempanded != 0x10000)
-                    *sss &= 0xffff;
-                else
-                    *sss = 0x8000;
-            } else
-                *sss = 0x7fff;
-        } else
-            *sss = 0x8000;
-    } else
-        *sss = 0x7fff;
-
-    if (!(tempt & 0x40000)) {
-        if (!(tempt & 0x20000)) {
-            tempanded = tempt & 0x18000;
-            if (tempanded != 0x8000) {
-                if (tempanded != 0x10000)
-                    *sst &= 0xffff;
-                else
-                    *sst = 0x8000;
-            } else
-                *sst = 0x7fff;
-        } else
-            *sst = 0x8000;
-    } else
-        *sst = 0x7fff;
+    *sss = tclod_tcclamp_single(*sss);
+    *sst = tclod_tcclamp_single(*sst);
 }
 
 static STRICTINLINE void
-lodfrac_lodtile_signals(struct rdp_state *wstate, int lodclamp, int32_t lod, uint32_t *l_tile, uint32_t *magnify,
-                        uint32_t *distant, int32_t *lfdst)
+lodfrac_lodtile_signals(struct rdp_state *wstate, int lodclamp, int32_t lod, uint32_t *l_tile, bool *magnify,
+                        bool *distant, int32_t *lfdst)
 {
-    uint32_t ltil, dis, mag;
+    uint32_t ltil;
+    bool dis;
+    bool mag;
     int32_t lf;
 
-    if ((lod & 0x4000) || lodclamp) {
-
-        mag = 0;
-        ltil = 0;
-        dis = 1;
-        lf = 0xff;
-    } else if (lod < wstate->min_level) {
-
-        mag = 1;
-        ltil = 0;
-        dis = wstate->max_level == 0;
+    if ((lod & 0x4000) || lodclamp) { // lod is large or tpersp overflowed
+        mag = false;
+        dis = true;                                   // distant
+        lf = 0xff;                                    // max lod frac
+        ltil = 0;                                     // level 0
+    } else if (lod < wstate->min_level || lod < 32) { // if this condition passes, lod < 32 since min_level < 32
+        mag = true;
+        dis = wstate->max_level == 0; // distant only if max_level is level 0
+        ltil = 0;                     // level 0
 
         if (!wstate->other_modes.sharpen_tex_en && !wstate->other_modes.detail_tex_en) {
-            if (dis)
-                lf = 0xff;
-            else
-                lf = 0;
+            lf = dis * 0xff; // either max or min lod frac
         } else {
-            lf = wstate->min_level << 3;
+            // take the larger of lod or min_level (5-bit) and make it 8-bit, 3 lsbits are 0
+            lf = MAX(lod, wstate->min_level) << 3;
             if (wstate->other_modes.sharpen_tex_en)
-                lf |= 0x100;
-        }
-    } else if (lod < 32) {
-        mag = 1;
-        ltil = 0;
-        dis = wstate->max_level == 0;
-
-        if (!wstate->other_modes.sharpen_tex_en && !wstate->other_modes.detail_tex_en) {
-            if (dis)
-                lf = 0xff;
-            else
-                lf = 0;
-        } else {
-            lf = lod << 3;
-            if (wstate->other_modes.sharpen_tex_en)
-                lf |= 0x100;
+                lf |= 0x100; // if sharpen, set 9th bit
         }
     } else {
-        mag = 0;
-        ltil = log2table[(lod >> 5) & 0xff];
+        mag = false;
+        ltil = log2table[(lod >> 5) & 0xff]; // lod is 15-bit, take upper 10 bits and ignore upper 2 bits
 
-        if (wstate->max_level)
-            dis = ((lod & 0x6000) || (ltil >= wstate->max_level)) != 0;
-        else
-            dis = 1;
+        // Distant if max_level is 0, lod is large
+        dis = (wstate->max_level == 0) || ((lod & 0x6000) != 0) || (ltil >= wstate->max_level);
 
         if (!wstate->other_modes.sharpen_tex_en && !wstate->other_modes.detail_tex_en && dis)
-            lf = 0xff;
+            lf = 0xff; // No sharpen or detail, and distant
         else
-            lf = ((lod << 3) >> ltil) & 0xff;
+            lf = ((lod << 3) >> ltil) & 0xff; // Right shift of at most 7, essentially (lod * 8) / 2^n
     }
 
     *distant = dis;
@@ -307,189 +252,184 @@ lodfrac_lodtile_signals(struct rdp_state *wstate, int lodclamp, int32_t lod, uin
 
 static STRICTINLINE void
 tclod_2cycle(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t s, int32_t t, int32_t w, int32_t dsinc,
-             int32_t dtinc, int32_t dwinc, int32_t prim_tile, int32_t *t1, int32_t *t2, int32_t *lf)
+             int32_t dtinc, int32_t dwinc, int32_t prim_tile, int32_t *tile1, int32_t *tile2, int32_t *lod_frac)
 {
-
-    int nextys, nextyt, nextysw, nexts, nextt, nextsw;
-    int lodclamp = 0;
-    int32_t lod = 0;
-    uint32_t l_tile;
-    uint32_t magnify = 0;
-    uint32_t distant = 0;
-    int inits = *sss, initt = *sst;
+    int preclamps = *sss, preclampt = *sst;
 
     tclod_tcclamp(sss, sst);
 
-    if (wstate->other_modes.f.dolod) {
+    // Renderer optimization, don't compute lod if it doesn't get used
+    if (!wstate->other_modes.f.dolod)
+        return;
 
-        nextsw = (w + dwinc) >> 16;
-        nexts = (s + dsinc) >> 16;
-        nextt = (t + dtinc) >> 16;
-        nextys = (s + wstate->spans_dsdy) >> 16;
-        nextyt = (t + wstate->spans_dtdy) >> 16;
-        nextysw = (w + wstate->spans_dwdy) >> 16;
+    int nexts = (s + dsinc) >> 16;
+    int nextt = (t + dtinc) >> 16;
+    int nextw = (w + dwinc) >> 16;
+    int nextys = (s + wstate->spans_dsdy) >> 16;
+    int nextyt = (t + wstate->spans_dtdy) >> 16;
+    int nextyw = (w + wstate->spans_dwdy) >> 16;
 
-        wstate->tcdiv_ptr(nexts, nextt, nextsw, &nexts, &nextt);
-        wstate->tcdiv_ptr(nextys, nextyt, nextysw, &nextys, &nextyt);
+    wstate->tcdiv_ptr(nexts, nextt, nextw, &nexts, &nextt);
+    wstate->tcdiv_ptr(nextys, nextyt, nextyw, &nextys, &nextyt);
 
-        lodclamp = (initt & 0x60000) || (nextt & 0x60000) || (inits & 0x60000) || (nexts & 0x60000) ||
-                   (nextys & 0x60000) || (nextyt & 0x60000);
+    // Check if anything overflowed
+    bool lodclamp = TCDIV_OVERFLOWED(preclamps) || TCDIV_OVERFLOWED(preclampt) || TCDIV_OVERFLOWED(nexts) ||
+                    TCDIV_OVERFLOWED(nextt) || TCDIV_OVERFLOWED(nextys) || TCDIV_OVERFLOWED(nextyt);
 
-        if (!lodclamp) {
-            tclod_4x17_to_15(inits, nexts, initt, nextt, 0, &lod);
-            tclod_4x17_to_15(inits, nextys, initt, nextyt, lod, &lod);
-        }
+    int32_t lod = 0;
+    if (!lodclamp) {
+        tclod_4x17_to_15(preclamps, nexts, preclampt, nextt, 0, &lod);
+        tclod_4x17_to_15(preclamps, nextys, preclampt, nextyt, lod, &lod);
+    }
 
-        lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, lf);
+    uint32_t l_tile;
+    bool distant;
+    bool magnify;
+    lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, lod_frac);
+    // can't move lodfrac_lodtile_signals below tex_lod_en since lodfrac gets cycled regardless
 
-        if (wstate->other_modes.tex_lod_en) {
-            if (distant)
-                l_tile = wstate->max_level;
-            if (!wstate->other_modes.detail_tex_en) {
-                *t1 = (prim_tile + l_tile) & 7;
-                if (!(distant || (!wstate->other_modes.sharpen_tex_en && magnify)))
-                    *t2 = (*t1 + 1) & 7;
-                else
-                    *t2 = *t1;
-            } else {
-                if (!magnify)
-                    *t1 = (prim_tile + l_tile + 1);
-                else
-                    *t1 = (prim_tile + l_tile);
-                *t1 &= 7;
-                if (!distant && !magnify)
-                    *t2 = (prim_tile + l_tile + 2) & 7;
-                else
-                    *t2 = (prim_tile + l_tile + 1) & 7;
-            }
-        }
+    if (!wstate->other_modes.tex_lod_en)
+        return;
+
+    // Distant, lod either clamped or we are at or exceeded max_level
+    if (distant)
+        l_tile = wstate->max_level;
+
+    if (!wstate->other_modes.detail_tex_en) {
+        *tile1 = (prim_tile + l_tile) & 7;
+
+        // This condition is sort of like a clamp at either max or min levels,
+        // distant means lod clamped or the tile selected was >= max_level
+        // magnify means lod < min_level or lod < 32
+        if (!(distant || (!wstate->other_modes.sharpen_tex_en && magnify)))
+            *tile2 = (*tile1 + 1) & 7;
+        else
+            *tile2 = *tile1;
+    } else {
+        // In detail mode, step the tile up once more if not min_level
+        // Also step the other tile up once more if the first tile was stepped up and it isn't distant
+        // (to avoid overstepping max_level)
+        *tile1 = (prim_tile + l_tile + 0 + (!magnify)) & 7;
+        *tile2 = (prim_tile + l_tile + 1 + (!magnify && !distant)) & 7;
     }
 }
 
 static STRICTINLINE void
 tclod_2cycle_next(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t *sss2, int32_t *sst2, int32_t s,
                   int32_t t, int32_t w, int32_t dsinc, int32_t dtinc, int32_t dwinc, int32_t prim_tile, int32_t *t1,
-                  int32_t *t2, int32_t *lf, int scanline)
+                  int32_t *t2, int32_t *lod_frac, int scanline)
 {
     UNUSED(s);
     UNUSED(t);
     UNUSED(w);
 
-    int nextys, nextyt, nextysw;
-    int nexts, nextt, nextsw;
-    int lodclamp = 0;
-    int32_t lod = 0;
-    uint32_t l_tile;
-    uint32_t magnify = 0;
-    uint32_t distant = 0;
-
-    int inits2 = *sss2, initt2 = *sst2;
-    int32_t dummy_lf;
+    int preclamps2 = *sss2, preclampt2 = *sst2;
 
     tclod_tcclamp(sss, sst);
     tclod_tcclamp(sss2, sst2);
 
-    if (wstate->other_modes.f.dolod) {
-        int nextscan = scanline + 1;
+    // Renderer optimization, don't compute lod if it doesn't get used
+    if (!wstate->other_modes.f.dolod)
+        return;
 
-        nextys = (wstate->span[nextscan].s + wstate->spans_dsdy) >> 16;
-        nextyt = (wstate->span[nextscan].t + wstate->spans_dtdy) >> 16;
-        nextysw = (wstate->span[nextscan].w + wstate->spans_dwdy) >> 16;
+    int nextscan = scanline + 1;
 
-        wstate->tcdiv_ptr(nextys, nextyt, nextysw, &nextys, &nextyt);
+    // For dtdy
 
-        lodclamp = ((initt2 & 0x60000) || (inits2 & 0x60000) || (nextys & 0x60000) || (nextyt & 0x60000));
+    int nextys = (wstate->span[nextscan].s + wstate->spans_dsdy) >> 16;
+    int nextyt = (wstate->span[nextscan].t + wstate->spans_dtdy) >> 16;
+    int nextysw = (wstate->span[nextscan].w + wstate->spans_dwdy) >> 16;
 
-        if (!lodclamp)
-            tclod_4x17_to_15(inits2, nextys, initt2, nextyt, 0, &lod);
+    wstate->tcdiv_ptr(nextys, nextyt, nextysw, &nextys, &nextyt);
 
-        lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, lf);
+    bool lodclamp = TCDIV_OVERFLOWED(preclamps2) || TCDIV_OVERFLOWED(preclampt2) || TCDIV_OVERFLOWED(nextys) ||
+                    TCDIV_OVERFLOWED(nextyt);
 
-        if (wstate->other_modes.tex_lod_en) {
-            if (distant)
-                l_tile = wstate->max_level;
-            if (!wstate->other_modes.detail_tex_en)
-                *t1 = (prim_tile + l_tile) & 7;
-            else {
-                if (!magnify)
-                    *t1 = (prim_tile + l_tile + 1);
-                else
-                    *t1 = (prim_tile + l_tile);
-                *t1 &= 7;
-            }
+    int32_t lod = 0;
+    if (!lodclamp)
+        tclod_4x17_to_15(preclamps2, nextys, preclampt2, nextyt, 0, &lod);
 
-            nexts = (wstate->span[nextscan].s + dsinc) >> 16;
-            nextt = (wstate->span[nextscan].t + dtinc) >> 16;
-            nextsw = (wstate->span[nextscan].w + dwinc) >> 16;
+    uint32_t l_tile;
+    bool distant;
+    bool magnify;
+    lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, lod_frac);
 
-            wstate->tcdiv_ptr(nexts, nextt, nextsw, &nexts, &nextt);
+    if (!wstate->other_modes.tex_lod_en)
+        return;
 
-            lodclamp = (lodclamp || (nextt & 0x60000) || (nexts & 0x60000));
+    if (distant)
+        l_tile = wstate->max_level;
 
-            if (!lodclamp)
-                tclod_4x17_to_15(inits2, nexts, initt2, nextt, lod, &lod);
+    if (!wstate->other_modes.detail_tex_en)
+        *t1 = (prim_tile + l_tile) & 7;
+    else
+        *t1 = (prim_tile + l_tile + (!magnify)) & 7;
 
-            lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, &dummy_lf);
+    // For dsdx
 
-            if (distant)
-                l_tile = wstate->max_level;
-            if (!wstate->other_modes.detail_tex_en)
-                *t2 = (prim_tile + l_tile) & 7;
-            else {
-                if (!magnify)
-                    *t2 = (prim_tile + l_tile + 1);
-                else
-                    *t2 = (prim_tile + l_tile);
-                *t2 &= 7;
-            }
-        }
-    }
+    int nexts = (wstate->span[nextscan].s + dsinc) >> 16;
+    int nextt = (wstate->span[nextscan].t + dtinc) >> 16;
+    int nextw = (wstate->span[nextscan].w + dwinc) >> 16;
+
+    wstate->tcdiv_ptr(nexts, nextt, nextw, &nexts, &nextt);
+
+    lodclamp = lodclamp || TCDIV_OVERFLOWED(nextt) || TCDIV_OVERFLOWED(nexts);
+    if (!lodclamp)
+        tclod_4x17_to_15(preclamps2, nexts, preclampt2, nextt, lod, &lod);
+
+    int32_t dummy_lod_frac;
+    lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, &dummy_lod_frac);
+
+    if (distant)
+        l_tile = wstate->max_level;
+
+    if (!wstate->other_modes.detail_tex_en)
+        *t2 = (prim_tile + l_tile) & 7;
+    else
+        *t2 = (prim_tile + l_tile + (!magnify)) & 7;
 }
 
 static STRICTINLINE void
 tclod_2cycle_notexel1(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t s, int32_t t, int32_t w,
                       int32_t dsinc, int32_t dtinc, int32_t dwinc, int32_t prim_tile, int32_t *t1)
 {
-    int nextys, nextyt, nextysw, nexts, nextt, nextsw;
-    int lodclamp = 0;
-    int32_t lod = 0;
-    uint32_t l_tile;
-    uint32_t magnify = 0;
-    uint32_t distant = 0;
     int inits = *sss, initt = *sst;
-
     tclod_tcclamp(sss, sst);
 
-    if (wstate->other_modes.f.dolod) {
-        nextsw = (w + dwinc) >> 16;
-        nexts = (s + dsinc) >> 16;
-        nextt = (t + dtinc) >> 16;
-        nextys = (s + wstate->spans_dsdy) >> 16;
-        nextyt = (t + wstate->spans_dtdy) >> 16;
-        nextysw = (w + wstate->spans_dwdy) >> 16;
+    if (!wstate->other_modes.f.dolod)
+        return;
 
-        wstate->tcdiv_ptr(nexts, nextt, nextsw, &nexts, &nextt);
-        wstate->tcdiv_ptr(nextys, nextyt, nextysw, &nextys, &nextyt);
+    int nexts = (s + dsinc) >> 16;
+    int nextt = (t + dtinc) >> 16;
+    int nextw = (w + dwinc) >> 16;
+    int nextys = (s + wstate->spans_dsdy) >> 16;
+    int nextyt = (t + wstate->spans_dtdy) >> 16;
+    int nextyw = (w + wstate->spans_dwdy) >> 16;
 
-        lodclamp = (initt & 0x60000) || (nextt & 0x60000) || (inits & 0x60000) || (nexts & 0x60000) ||
-                   (nextys & 0x60000) || (nextyt & 0x60000);
+    wstate->tcdiv_ptr(nexts, nextt, nextw, &nexts, &nextt);
+    wstate->tcdiv_ptr(nextys, nextyt, nextyw, &nextys, &nextyt);
 
-        if (!lodclamp) {
-            tclod_4x17_to_15(inits, nexts, initt, nextt, 0, &lod);
-            tclod_4x17_to_15(inits, nextys, initt, nextyt, lod, &lod);
-        }
+    bool lodclamp = TCDIV_OVERFLOWED(initt) || TCDIV_OVERFLOWED(nextt) || TCDIV_OVERFLOWED(inits) ||
+                    TCDIV_OVERFLOWED(nexts) || TCDIV_OVERFLOWED(nextys) || TCDIV_OVERFLOWED(nextyt);
 
-        lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, &wstate->lod_frac);
-
-        if (wstate->other_modes.tex_lod_en) {
-            if (distant)
-                l_tile = wstate->max_level;
-            if (!wstate->other_modes.detail_tex_en || magnify)
-                *t1 = (prim_tile + l_tile) & 7;
-            else
-                *t1 = (prim_tile + l_tile + 1) & 7;
-        }
+    int32_t lod = 0;
+    if (!lodclamp) {
+        tclod_4x17_to_15(inits, nexts, initt, nextt, 0, &lod);
+        tclod_4x17_to_15(inits, nextys, initt, nextyt, lod, &lod);
     }
+
+    uint32_t l_tile;
+    bool distant;
+    bool magnify;
+    lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, &wstate->lod_frac);
+
+    if (!wstate->other_modes.tex_lod_en)
+        return;
+
+    if (distant)
+        l_tile = wstate->max_level;
+
+    *t1 = (prim_tile + l_tile + ((wstate->other_modes.detail_tex_en && !magnify))) & 7;
 }
 
 static STRICTINLINE void
@@ -497,58 +437,57 @@ tclod_1cycle_current(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32
                      int32_t t, int32_t w, int32_t dsinc, int32_t dtinc, int32_t dwinc, int32_t scanline,
                      int32_t prim_tile, int32_t *t1, struct spansigs *sigs)
 {
-
-    int fars, fart, farsw;
-    int lodclamp = 0;
-    int32_t lod = 0;
-    uint32_t l_tile = 0, magnify = 0, distant = 0;
-
     tclod_tcclamp(sss, sst);
 
-    if (wstate->other_modes.f.dolod) {
-        int nextscan = scanline + 1;
+    if (!wstate->other_modes.f.dolod)
+        return;
 
-        if (wstate->span[nextscan].validline) {
-            if (!sigs->endspan || !sigs->longspan) {
-                if (!(sigs->preendspan && sigs->longspan) && !(sigs->endspan && sigs->midspan)) {
-                    farsw = (w + (dwinc << 1)) >> 16;
-                    fars = (s + (dsinc << 1)) >> 16;
-                    fart = (t + (dtinc << 1)) >> 16;
-                } else {
-                    farsw = (w - dwinc) >> 16;
-                    fars = (s - dsinc) >> 16;
-                    fart = (t - dtinc) >> 16;
-                }
-            } else {
-                fart = (wstate->span[nextscan].t + dtinc) >> 16;
-                fars = (wstate->span[nextscan].s + dsinc) >> 16;
-                farsw = (wstate->span[nextscan].w + dwinc) >> 16;
-            }
-        } else {
-            farsw = (w + (dwinc << 1)) >> 16;
+    int nextscan = scanline + 1;
+
+    int fars, fart, farw;
+    if (wstate->span[nextscan].validline) {
+        if (sigs->endspan && sigs->longspan) {
+            // peek next scanline if at the end of the current scanline, which was a long span
+            fars = (wstate->span[nextscan].s + dsinc) >> 16;
+            fart = (wstate->span[nextscan].t + dtinc) >> 16;
+            farw = (wstate->span[nextscan].w + dwinc) >> 16;
+        } else if (!(sigs->preendspan && sigs->longspan) && !(sigs->endspan && sigs->midspan)) {
             fars = (s + (dsinc << 1)) >> 16;
             fart = (t + (dtinc << 1)) >> 16;
+            farw = (w + (dwinc << 1)) >> 16;
+        } else {
+            fars = (s - dsinc) >> 16;
+            fart = (t - dtinc) >> 16;
+            farw = (w - dwinc) >> 16;
         }
-
-        wstate->tcdiv_ptr(fars, fart, farsw, &fars, &fart);
-
-        lodclamp = (fart & 0x60000) || (nextt & 0x60000) || (fars & 0x60000) || (nexts & 0x60000);
-
-        if (!lodclamp)
-            tclod_4x17_to_15(nexts, fars, nextt, fart, 0, &lod);
-
-        lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, &wstate->lod_frac);
-
-        if (wstate->other_modes.tex_lod_en) {
-            if (distant)
-                l_tile = wstate->max_level;
-
-            if (!wstate->other_modes.detail_tex_en || magnify)
-                *t1 = (prim_tile + l_tile) & 7;
-            else
-                *t1 = (prim_tile + l_tile + 1) & 7;
-        }
+    } else {
+        // If next scanline is invalid
+        fars = (s + (dsinc << 1)) >> 16;
+        fart = (t + (dtinc << 1)) >> 16;
+        farw = (w + (dwinc << 1)) >> 16;
     }
+
+    wstate->tcdiv_ptr(fars, fart, farw, &fars, &fart);
+
+    bool lodclamp =
+        TCDIV_OVERFLOWED(fart) || TCDIV_OVERFLOWED(nextt) || TCDIV_OVERFLOWED(fars) || TCDIV_OVERFLOWED(nexts);
+
+    int32_t lod = 0;
+    if (!lodclamp)
+        tclod_4x17_to_15(nexts, fars, nextt, fart, 0, &lod);
+
+    uint32_t l_tile;
+    bool distant;
+    bool magnify;
+    lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, &wstate->lod_frac);
+
+    if (!wstate->other_modes.tex_lod_en)
+        return;
+
+    if (distant)
+        l_tile = wstate->max_level;
+
+    *t1 = (prim_tile + l_tile + (wstate->other_modes.detail_tex_en && !magnify)) & 7;
 }
 
 static STRICTINLINE void
@@ -556,67 +495,68 @@ tclod_1cycle_current_simple(struct rdp_state *wstate, int32_t *sss, int32_t *sst
                             int32_t dsinc, int32_t dtinc, int32_t dwinc, int32_t scanline, int32_t prim_tile,
                             int32_t *t1, struct spansigs *sigs)
 {
-    int fars, fart, farsw, nexts, nextt, nextsw;
-    int lodclamp = 0;
-    int32_t lod = 0;
-    uint32_t l_tile = 0, magnify = 0, distant = 0;
-
     tclod_tcclamp(sss, sst);
 
-    if (wstate->other_modes.f.dolod) {
+    if (!wstate->other_modes.f.dolod)
+        return;
 
-        int nextscan = scanline + 1;
-        if (wstate->span[nextscan].validline) {
-            if (!sigs->endspan || !sigs->longspan) {
-                nextsw = (w + dwinc) >> 16;
-                nexts = (s + dsinc) >> 16;
-                nextt = (t + dtinc) >> 16;
+    int nextscan = scanline + 1;
 
-                if (!(sigs->preendspan && sigs->longspan) && !(sigs->endspan && sigs->midspan)) {
-                    farsw = (w + (dwinc << 1)) >> 16;
-                    fars = (s + (dsinc << 1)) >> 16;
-                    fart = (t + (dtinc << 1)) >> 16;
-                } else {
-                    farsw = (w - dwinc) >> 16;
-                    fars = (s - dsinc) >> 16;
-                    fart = (t - dtinc) >> 16;
-                }
-            } else {
-                nextt = wstate->span[nextscan].t >> 16;
-                nexts = wstate->span[nextscan].s >> 16;
-                nextsw = wstate->span[nextscan].w >> 16;
-                fart = (wstate->span[nextscan].t + dtinc) >> 16;
-                fars = (wstate->span[nextscan].s + dsinc) >> 16;
-                farsw = (wstate->span[nextscan].w + dwinc) >> 16;
-            }
-        } else {
-            nextsw = (w + dwinc) >> 16;
+    int fars, fart, farw, nexts, nextt, nextw;
+    if (wstate->span[nextscan].validline) {
+        if (!sigs->endspan || !sigs->longspan) {
             nexts = (s + dsinc) >> 16;
             nextt = (t + dtinc) >> 16;
-            farsw = (w + (dwinc << 1)) >> 16;
-            fars = (s + (dsinc << 1)) >> 16;
-            fart = (t + (dtinc << 1)) >> 16;
+            nextw = (w + dwinc) >> 16;
+
+            if (!(sigs->preendspan && sigs->longspan) && !(sigs->endspan && sigs->midspan)) {
+                fars = (s + (dsinc << 1)) >> 16;
+                fart = (t + (dtinc << 1)) >> 16;
+                farw = (w + (dwinc << 1)) >> 16;
+            } else {
+                fars = (s - dsinc) >> 16;
+                fart = (t - dtinc) >> 16;
+                farw = (w - dwinc) >> 16;
+            }
+        } else {
+            nexts = wstate->span[nextscan].s >> 16;
+            nextt = wstate->span[nextscan].t >> 16;
+            nextw = wstate->span[nextscan].w >> 16;
+            fars = (wstate->span[nextscan].s + dsinc) >> 16;
+            fart = (wstate->span[nextscan].t + dtinc) >> 16;
+            farw = (wstate->span[nextscan].w + dwinc) >> 16;
         }
-
-        wstate->tcdiv_ptr(nexts, nextt, nextsw, &nexts, &nextt);
-        wstate->tcdiv_ptr(fars, fart, farsw, &fars, &fart);
-
-        lodclamp = (fart & 0x60000) || (nextt & 0x60000) || (fars & 0x60000) || (nexts & 0x60000);
-
-        if (!lodclamp)
-            tclod_4x17_to_15(nexts, fars, nextt, fart, 0, &lod);
-
-        lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, &wstate->lod_frac);
-
-        if (wstate->other_modes.tex_lod_en) {
-            if (distant)
-                l_tile = wstate->max_level;
-            if (!wstate->other_modes.detail_tex_en || magnify)
-                *t1 = (prim_tile + l_tile) & 7;
-            else
-                *t1 = (prim_tile + l_tile + 1) & 7;
-        }
+    } else {
+        nexts = (s + dsinc) >> 16;
+        nextt = (t + dtinc) >> 16;
+        nextw = (w + dwinc) >> 16;
+        fars = (s + (dsinc << 1)) >> 16;
+        fart = (t + (dtinc << 1)) >> 16;
+        farw = (w + (dwinc << 1)) >> 16;
     }
+
+    wstate->tcdiv_ptr(nexts, nextt, nextw, &nexts, &nextt);
+    wstate->tcdiv_ptr(fars, fart, farw, &fars, &fart);
+
+    bool lodclamp =
+        TCDIV_OVERFLOWED(fart) || TCDIV_OVERFLOWED(nextt) || TCDIV_OVERFLOWED(fars) || TCDIV_OVERFLOWED(nexts);
+
+    int32_t lod = 0;
+    if (!lodclamp)
+        tclod_4x17_to_15(nexts, fars, nextt, fart, 0, &lod);
+
+    uint32_t l_tile;
+    bool distant;
+    bool magnify;
+    lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, &wstate->lod_frac);
+
+    if (!wstate->other_modes.tex_lod_en)
+        return;
+
+    if (distant)
+        l_tile = wstate->max_level;
+
+    *t1 = (prim_tile + l_tile + (wstate->other_modes.detail_tex_en && !magnify)) & 7;
 }
 
 static STRICTINLINE void
@@ -624,175 +564,169 @@ tclod_1cycle_next(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t 
                   int32_t dtinc, int32_t dwinc, int32_t scanline, int32_t prim_tile, int32_t *t1, struct spansigs *sigs,
                   int32_t *prelodfrac)
 {
-    int nexts, nextt, nextsw, fars, fart, farsw;
-    int lodclamp = 0;
-    int32_t lod = 0;
-    uint32_t l_tile = 0, magnify = 0, distant = 0;
-
     tclod_tcclamp(sss, sst);
 
-    if (wstate->other_modes.f.dolod) {
+    if (!wstate->other_modes.f.dolod)
+        return;
 
-        int nextscan = scanline + 1;
+    int nextscan = scanline + 1;
 
-        if (wstate->span[nextscan].validline) {
+    int nexts, nextt, nextw, fars, fart, farw;
+    if (wstate->span[nextscan].validline) {
+        if (!sigs->nextspan) {
+            if (!sigs->endspan || !sigs->longspan) {
+                nexts = (s + dsinc) >> 16;
+                nextt = (t + dtinc) >> 16;
+                nextw = (w + dwinc) >> 16;
 
-            if (!sigs->nextspan) {
-                if (!sigs->endspan || !sigs->longspan) {
-                    nextsw = (w + dwinc) >> 16;
-                    nexts = (s + dsinc) >> 16;
-                    nextt = (t + dtinc) >> 16;
-
-                    if (!(sigs->preendspan && sigs->longspan) && !(sigs->endspan && sigs->midspan)) {
-                        farsw = (w + (dwinc << 1)) >> 16;
-                        fars = (s + (dsinc << 1)) >> 16;
-                        fart = (t + (dtinc << 1)) >> 16;
-                    } else {
-                        farsw = (w - dwinc) >> 16;
-                        fars = (s - dsinc) >> 16;
-                        fart = (t - dtinc) >> 16;
-                    }
+                if (!(sigs->preendspan && sigs->longspan) && !(sigs->endspan && sigs->midspan)) {
+                    fars = (s + (dsinc << 1)) >> 16;
+                    fart = (t + (dtinc << 1)) >> 16;
+                    farw = (w + (dwinc << 1)) >> 16;
                 } else {
-                    nextt = wstate->span[nextscan].t;
-                    nexts = wstate->span[nextscan].s;
-                    nextsw = wstate->span[nextscan].w;
-                    fart = (nextt + dtinc) >> 16;
-                    fars = (nexts + dsinc) >> 16;
-                    farsw = (nextsw + dwinc) >> 16;
-                    nextt >>= 16;
-                    nexts >>= 16;
-                    nextsw >>= 16;
-                }
-            } else {
-
-                if (sigs->longspan) {
-                    nextt = (wstate->span[nextscan].t + dtinc) >> 16;
-                    nexts = (wstate->span[nextscan].s + dsinc) >> 16;
-                    nextsw = (wstate->span[nextscan].w + dwinc) >> 16;
-                    fart = (wstate->span[nextscan].t + (dtinc << 1)) >> 16;
-                    fars = (wstate->span[nextscan].s + (dsinc << 1)) >> 16;
-                    farsw = (wstate->span[nextscan].w + (dwinc << 1)) >> 16;
-                } else if (sigs->midspan) {
-                    nextt = wstate->span[nextscan].t >> 16;
-                    nexts = wstate->span[nextscan].s >> 16;
-                    nextsw = wstate->span[nextscan].w >> 16;
-                    fart = (wstate->span[nextscan].t + dtinc) >> 16;
-                    fars = (wstate->span[nextscan].s + dsinc) >> 16;
-                    farsw = (wstate->span[nextscan].w + dwinc) >> 16;
-                } else if (sigs->onelessthanmid) {
-                    nextsw = (w + dwinc) >> 16;
-                    nexts = (s + dsinc) >> 16;
-                    nextt = (t + dtinc) >> 16;
-                    farsw = (w - dwinc) >> 16;
                     fars = (s - dsinc) >> 16;
                     fart = (t - dtinc) >> 16;
-                } else {
-                    nextt = (t + dtinc) >> 16;
-                    nexts = (s + dsinc) >> 16;
-                    nextsw = (w + dwinc) >> 16;
-                    fart = (t + (dtinc << 1)) >> 16;
-                    fars = (s + (dsinc << 1)) >> 16;
-                    farsw = (w + (dwinc << 1)) >> 16;
+                    farw = (w - dwinc) >> 16;
                 }
+            } else {
+                nexts = wstate->span[nextscan].s;
+                nextt = wstate->span[nextscan].t;
+                nextw = wstate->span[nextscan].w;
+                fars = (nexts + dsinc) >> 16;
+                fart = (nextt + dtinc) >> 16;
+                farw = (nextw + dwinc) >> 16;
+                nexts >>= 16;
+                nextt >>= 16;
+                nextw >>= 16;
             }
         } else {
-            nextsw = (w + dwinc) >> 16;
-            nexts = (s + dsinc) >> 16;
-            nextt = (t + dtinc) >> 16;
-            farsw = (w + (dwinc << 1)) >> 16;
-            fars = (s + (dsinc << 1)) >> 16;
-            fart = (t + (dtinc << 1)) >> 16;
+
+            if (sigs->longspan) {
+                nexts = (wstate->span[nextscan].s + dsinc) >> 16;
+                nextt = (wstate->span[nextscan].t + dtinc) >> 16;
+                nextw = (wstate->span[nextscan].w + dwinc) >> 16;
+                fars = (wstate->span[nextscan].s + (dsinc << 1)) >> 16;
+                fart = (wstate->span[nextscan].t + (dtinc << 1)) >> 16;
+                farw = (wstate->span[nextscan].w + (dwinc << 1)) >> 16;
+            } else if (sigs->midspan) {
+                nexts = wstate->span[nextscan].s >> 16;
+                nextt = wstate->span[nextscan].t >> 16;
+                nextw = wstate->span[nextscan].w >> 16;
+                fars = (wstate->span[nextscan].s + dsinc) >> 16;
+                fart = (wstate->span[nextscan].t + dtinc) >> 16;
+                farw = (wstate->span[nextscan].w + dwinc) >> 16;
+            } else if (sigs->onelessthanmid) {
+                nexts = (s + dsinc) >> 16;
+                nextt = (t + dtinc) >> 16;
+                nextw = (w + dwinc) >> 16;
+                fars = (s - dsinc) >> 16;
+                fart = (t - dtinc) >> 16;
+                farw = (w - dwinc) >> 16;
+            } else {
+                nexts = (s + dsinc) >> 16;
+                nextt = (t + dtinc) >> 16;
+                nextw = (w + dwinc) >> 16;
+                fars = (s + (dsinc << 1)) >> 16;
+                fart = (t + (dtinc << 1)) >> 16;
+                farw = (w + (dwinc << 1)) >> 16;
+            }
         }
-
-        wstate->tcdiv_ptr(nexts, nextt, nextsw, &nexts, &nextt);
-        wstate->tcdiv_ptr(fars, fart, farsw, &fars, &fart);
-
-        lodclamp = (fart & 0x60000) || (nextt & 0x60000) || (fars & 0x60000) || (nexts & 0x60000);
-
-        if (!lodclamp)
-            tclod_4x17_to_15(nexts, fars, nextt, fart, 0, &lod);
-
-        lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, prelodfrac);
-
-        if (wstate->other_modes.tex_lod_en) {
-            if (distant)
-                l_tile = wstate->max_level;
-            if (!wstate->other_modes.detail_tex_en || magnify)
-                *t1 = (prim_tile + l_tile) & 7;
-            else
-                *t1 = (prim_tile + l_tile + 1) & 7;
-        }
+    } else {
+        nexts = (s + dsinc) >> 16;
+        nextt = (t + dtinc) >> 16;
+        nextw = (w + dwinc) >> 16;
+        farw = (w + (dwinc << 1)) >> 16;
+        fars = (s + (dsinc << 1)) >> 16;
+        fart = (t + (dtinc << 1)) >> 16;
     }
+
+    wstate->tcdiv_ptr(nexts, nextt, nextw, &nexts, &nextt);
+    wstate->tcdiv_ptr(fars, fart, farw, &fars, &fart);
+
+    bool lodclamp =
+        TCDIV_OVERFLOWED(fart) || TCDIV_OVERFLOWED(nextt) || TCDIV_OVERFLOWED(fars) || TCDIV_OVERFLOWED(nexts);
+
+    int32_t lod = 0;
+    if (!lodclamp)
+        tclod_4x17_to_15(nexts, fars, nextt, fart, 0, &lod);
+
+    uint32_t l_tile;
+    bool distant;
+    bool magnify;
+    lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, prelodfrac);
+
+    if (!wstate->other_modes.tex_lod_en)
+        return;
+
+    if (distant)
+        l_tile = wstate->max_level;
+
+    *t1 = (prim_tile + l_tile + (wstate->other_modes.detail_tex_en && !magnify)) & 7;
 }
 
 static STRICTINLINE void
 tclod_copy(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t s, int32_t t, int32_t w, int32_t dsinc,
            int32_t dtinc, int32_t dwinc, int32_t prim_tile, int32_t *t1)
 {
-
-    int nexts, nextt, nextsw, fars, fart, farsw;
-    int lodclamp = 0;
-    int32_t lod = 0;
-    uint32_t l_tile = 0, magnify = 0, distant = 0;
-
     tclod_tcclamp(sss, sst);
 
-    if (wstate->other_modes.tex_lod_en) {
+    if (!wstate->other_modes.tex_lod_en)
+        return;
 
-        nextsw = (w + dwinc) >> 16;
-        nexts = (s + dsinc) >> 16;
-        nextt = (t + dtinc) >> 16;
-        farsw = (w + (dwinc << 1)) >> 16;
-        fars = (s + (dsinc << 1)) >> 16;
-        fart = (t + (dtinc << 1)) >> 16;
+    int nexts = (s + dsinc) >> 16;
+    int nextt = (t + dtinc) >> 16;
+    int nextw = (w + dwinc) >> 16;
+    int fars = (s + (dsinc << 1)) >> 16;
+    int fart = (t + (dtinc << 1)) >> 16;
+    int farw = (w + (dwinc << 1)) >> 16;
 
-        wstate->tcdiv_ptr(nexts, nextt, nextsw, &nexts, &nextt);
-        wstate->tcdiv_ptr(fars, fart, farsw, &fars, &fart);
+    wstate->tcdiv_ptr(nexts, nextt, nextw, &nexts, &nextt);
+    wstate->tcdiv_ptr(fars, fart, farw, &fars, &fart);
 
-        lodclamp = (fart & 0x60000) || (nextt & 0x60000) || (fars & 0x60000) || (nexts & 0x60000);
+    bool lodclamp =
+        TCDIV_OVERFLOWED(fart) || TCDIV_OVERFLOWED(nextt) || TCDIV_OVERFLOWED(fars) || TCDIV_OVERFLOWED(nexts);
 
-        if (!lodclamp)
-            tclod_4x17_to_15(nexts, fars, nextt, fart, 0, &lod);
+    int32_t lod = 0;
+    if (!lodclamp)
+        tclod_4x17_to_15(nexts, fars, nextt, fart, 0, &lod);
 
-        if ((lod & 0x4000) || lodclamp) {
+    uint32_t l_tile;
+    bool distant;
+    bool magnify;
+    if ((lod & 0x4000) || lodclamp) {
+        l_tile = wstate->max_level;
+        distant = false;
+        magnify = false;
+    } else if (lod < 32) {
+        l_tile = 0;
+        distant = false;
+        magnify = true;
+    } else {
+        l_tile = log2table[(lod >> 5) & 0xff];
+        distant = (!wstate->max_level) || (lod & 0x6000) || (l_tile >= wstate->max_level);
+        magnify = false;
 
-            magnify = 0;
+        if (distant)
             l_tile = wstate->max_level;
-        } else if (lod < 32) {
-            magnify = 1;
-            l_tile = 0;
-        } else {
-            magnify = 0;
-            l_tile = log2table[(lod >> 5) & 0xff];
-
-            if (wstate->max_level)
-                distant = ((lod & 0x6000) || (l_tile >= wstate->max_level)) != 0;
-            else
-                distant = 1;
-
-            if (distant)
-                l_tile = wstate->max_level;
-        }
-
-        if (!wstate->other_modes.detail_tex_en || magnify)
-            *t1 = (prim_tile + l_tile) & 7;
-        else
-            *t1 = (prim_tile + l_tile + 1) & 7;
     }
+
+    *t1 = (prim_tile + l_tile + (wstate->other_modes.detail_tex_en && !magnify)) & 7;
 }
 
 static STRICTINLINE void
 tc_pipeline_copy(struct tile *tile, int32_t *sss0, int32_t *sss1, int32_t *sss2, int32_t *sss3, int32_t *sst)
 {
-    int ss0 = *sss0, ss1 = 0, ss2 = 0, ss3 = 0, st = *sst;
+    int ss0, ss1, ss2, ss3;
+    int st;
 
+    ss0 = *sss0;
+    st = *sst;
     tcshift_copy(tile, &ss0, &st);
 
-    ss0 = TRELATIVE(ss0, tile->sl);
-    st = TRELATIVE(st, tile->tl);
-    ss0 = (ss0 >> 5);
-    st = (st >> 5);
+    ss0 = TRELATIVE(ss0, tile->sl) >> 5;
+    st = TRELATIVE(st, tile->tl) >> 5;
 
+    ss0 = ss0 + 0;
     ss1 = ss0 + 1;
     ss2 = ss0 + 2;
     ss3 = ss0 + 3;
@@ -809,20 +743,17 @@ tc_pipeline_copy(struct tile *tile, int32_t *sss0, int32_t *sss1, int32_t *sss2,
 static STRICTINLINE void
 tc_pipeline_load(struct tile *tile, int32_t *sss, int32_t *sst, int coord_quad)
 {
-    int sss1 = *sss, sst1 = *sst;
+    int sss1 = *sss;
+    int sst1 = *sst;
+
     sss1 = SIGN16(sss1);
     sst1 = SIGN16(sst1);
 
     sss1 = TRELATIVE(sss1, tile->sl);
     sst1 = TRELATIVE(sst1, tile->tl);
 
-    if (!coord_quad) {
-        sss1 = (sss1 >> 5);
-        sst1 = (sst1 >> 5);
-    } else {
-        sss1 = (sss1 >> 3);
-        sst1 = (sst1 >> 3);
-    }
+    sss1 = sss1 >> (3 + 2 * (!coord_quad));
+    sst1 = sst1 >> (3 + 2 * (!coord_quad));
 
     *sss = sss1;
     *sst = sst1;
@@ -838,67 +769,38 @@ tcdiv_nopersp(int32_t ss, int32_t st, int32_t sw, int32_t *sss, int32_t *sst)
 }
 
 static void
-tcdiv_persp(int32_t ss, int32_t st, int32_t sw, int32_t *sss, int32_t *sst)
+tcdiv_persp_one(int16_t C, int shift, int rcp, int temp_mask, bool W_carry, int32_t *C_out)
 {
+    int prod = C * rcp;
+    int out_of_bounds = prod & temp_mask;
+    int overflow = 0;
+    int32_t temp;
 
-    int w_carry = 0;
-    int shift;
-    int tlu_rcp;
-    int sprod, tprod;
-    int outofbounds_s, outofbounds_t;
-    int tempmask;
-    int shift_value;
-    int32_t temps, tempt;
+    if (shift != 14)
+        temp = prod >>= (13 - shift);
+    else // 13 - 14 = -1 so shift left by 1
+        temp = prod << 1;
 
-    int overunder_s = 0, overunder_t = 0;
+    // compute overflow
+    if (out_of_bounds != temp_mask && out_of_bounds != 0)
+        overflow = (prod & (1 << 29)) ? (1 << 17) : (2 << 17);
 
-    if (SIGN16(sw) <= 0)
-        w_carry = 1;
+    if (W_carry)
+        overflow |= 2 << 17;
 
-    sw &= 0x7fff;
+    *C_out = overflow | (temp & 0x1ffff);
+}
 
-    shift = tcdiv_table[sw];
-    tlu_rcp = shift >> 4;
-    shift &= 0xf;
+static void
+tcdiv_persp(int32_t S, int32_t T, int32_t W, int32_t *S_out, int32_t *T_out)
+{
+    int W_carry = W <= 0;
+    int shift = tcdiv_table[W & 0x7FFF] & 0xF;
+    int rcp = tcdiv_table[W & 0x7FFF] >> 4;
+    int temp_mask = ((1 << 30) - 1) & -((1 << 29) >> shift);
 
-    sprod = SIGN16(ss) * tlu_rcp;
-    tprod = SIGN16(st) * tlu_rcp;
-
-    tempmask = ((1 << 30) - 1) & -((1 << 29) >> shift);
-
-    outofbounds_s = sprod & tempmask;
-    outofbounds_t = tprod & tempmask;
-
-    if (shift != 0xe) {
-        shift_value = 13 - shift;
-        temps = sprod = (sprod >> shift_value);
-        tempt = tprod = (tprod >> shift_value);
-    } else {
-        temps = sprod << 1;
-        tempt = tprod << 1;
-    }
-
-    if (outofbounds_s != tempmask && outofbounds_s != 0) {
-        if (!(sprod & (1 << 29)))
-            overunder_s = 2 << 17;
-        else
-            overunder_s = 1 << 17;
-    }
-
-    if (outofbounds_t != tempmask && outofbounds_t != 0) {
-        if (!(tprod & (1 << 29)))
-            overunder_t = 2 << 17;
-        else
-            overunder_t = 1 << 17;
-    }
-
-    if (w_carry) {
-        overunder_s |= (2 << 17);
-        overunder_t |= (2 << 17);
-    }
-
-    *sss = (temps & 0x1ffff) | overunder_s;
-    *sst = (tempt & 0x1ffff) | overunder_t;
+    tcdiv_persp_one(S, shift, rcp, temp_mask, W_carry, S_out);
+    tcdiv_persp_one(T, shift, rcp, temp_mask, W_carry, T_out);
 }
 
 static void

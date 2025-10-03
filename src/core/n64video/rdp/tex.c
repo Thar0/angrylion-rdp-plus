@@ -150,10 +150,12 @@ texture_pipeline_cycle(struct rdp_state *wstate, struct color *TEX, struct color
     sss1 = TRELATIVE(sss1, wstate->tile[tilenum].sl);
     sst1 = TRELATIVE(sst1, wstate->tile[tilenum].tl);
 
-    if (wstate->other_modes.sample_type || wstate->other_modes.en_tlut) {
-        sfrac = sss1 & 0x1f;
-        tfrac = sst1 & 0x1f;
+    sfrac = sss1 & 0x1f;
+    tfrac = sst1 & 0x1f;
+    sss1 >>= 5;
+    sst1 >>= 5;
 
+    if (wstate->other_modes.sample_type || wstate->other_modes.en_tlut) {
         tcclamp_cycle(&wstate->tile[tilenum], &sss1, &sst1, &sfrac, &tfrac, maxs, maxt);
 
         tcmask_coupled(&wstate->tile[tilenum], &sss1, &sdiff, &sst1, &tdiff);
@@ -323,7 +325,6 @@ texture_pipeline_cycle(struct rdp_state *wstate, struct color *TEX, struct color
         TEX->a &= 0x1ff;
 
     } else {
-
         tcclamp_cycle_light(&wstate->tile[tilenum], &sss1, &sst1, maxs, maxt);
 
         tcmask(&wstate->tile[tilenum], &sss1, &sst1);
