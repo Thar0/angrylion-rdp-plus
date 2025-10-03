@@ -1,10 +1,5 @@
 #ifdef N64VIDEO_C
 
-#define ZMODE_OPAQUE           0
-#define ZMODE_INTERPENETRATING 1
-#define ZMODE_TRANSPARENT      2
-#define ZMODE_DECAL            3
-
 static uint16_t z_com_table[0x40000];
 static uint32_t z_complete_dec_table[0x4000];
 static uint16_t deltaz_comparator_lut[0x10000];
@@ -13,179 +8,57 @@ static struct {
     uint32_t shift;
     uint32_t add;
 } z_dec_table[8] = {
-    {6,  0x00000},
-    { 5, 0x20000},
-    { 4, 0x30000},
-    { 3, 0x38000},
-    { 2, 0x3c000},
-    { 1, 0x3e000},
-    { 0, 0x3f000},
-    { 0, 0x3f800},
+  // clang-format off
+    { 6, 0x00000 },
+    { 5, 0x20000 },
+    { 4, 0x30000 },
+    { 3, 0x38000 },
+    { 2, 0x3C000 },
+    { 1, 0x3E000 },
+    { 0, 0x3F000 },
+    { 0, 0x3F800 },
+  // clang-format on
 };
 
 static STRICTINLINE uint32_t
 z_decompress(uint32_t zb)
 {
-    return z_complete_dec_table[(zb >> 2) & 0x3fff];
+    return z_complete_dec_table[(zb >> 2) & 0x3FFF];
 }
 
 static INLINE void
 z_build_com_table(void)
 {
+    for (int z = 0; z < 0x40000; z++) {
+        uint16_t altmem = 0;
+        switch ((z >> 11) & 0x7F) {
+            case_no_default;
 
-    int z;
-    uint16_t altmem = 0;
-    for (z = 0; z < 0x40000; z++) {
-        switch ((z >> 11) & 0x7f) {
-            case 0x00:
-            case 0x01:
-            case 0x02:
-            case 0x03:
-            case 0x04:
-            case 0x05:
-            case 0x06:
-            case 0x07:
-            case 0x08:
-            case 0x09:
-            case 0x0a:
-            case 0x0b:
-            case 0x0c:
-            case 0x0d:
-            case 0x0e:
-            case 0x0f:
-            case 0x10:
-            case 0x11:
-            case 0x12:
-            case 0x13:
-            case 0x14:
-            case 0x15:
-            case 0x16:
-            case 0x17:
-            case 0x18:
-            case 0x19:
-            case 0x1a:
-            case 0x1b:
-            case 0x1c:
-            case 0x1d:
-            case 0x1e:
-            case 0x1f:
-            case 0x20:
-            case 0x21:
-            case 0x22:
-            case 0x23:
-            case 0x24:
-            case 0x25:
-            case 0x26:
-            case 0x27:
-            case 0x28:
-            case 0x29:
-            case 0x2a:
-            case 0x2b:
-            case 0x2c:
-            case 0x2d:
-            case 0x2e:
-            case 0x2f:
-            case 0x30:
-            case 0x31:
-            case 0x32:
-            case 0x33:
-            case 0x34:
-            case 0x35:
-            case 0x36:
-            case 0x37:
-            case 0x38:
-            case 0x39:
-            case 0x3a:
-            case 0x3b:
-            case 0x3c:
-            case 0x3d:
-            case 0x3e:
-            case 0x3f:
-                altmem = (z >> 4) & 0x1ffc;
+            case 0x00 ... 0x3F: // 64
+                altmem = ((z >> 4) & 0x1FFC) | 0x0000;
                 break;
-            case 0x40:
-            case 0x41:
-            case 0x42:
-            case 0x43:
-            case 0x44:
-            case 0x45:
-            case 0x46:
-            case 0x47:
-            case 0x48:
-            case 0x49:
-            case 0x4a:
-            case 0x4b:
-            case 0x4c:
-            case 0x4d:
-            case 0x4e:
-            case 0x4f:
-            case 0x50:
-            case 0x51:
-            case 0x52:
-            case 0x53:
-            case 0x54:
-            case 0x55:
-            case 0x56:
-            case 0x57:
-            case 0x58:
-            case 0x59:
-            case 0x5a:
-            case 0x5b:
-            case 0x5c:
-            case 0x5d:
-            case 0x5e:
-            case 0x5f:
-                altmem = ((z >> 3) & 0x1ffc) | 0x2000;
+            case 0x40 ... 0x5F: // 32
+                altmem = ((z >> 3) & 0x1FFC) | 0x2000;
                 break;
-            case 0x60:
-            case 0x61:
-            case 0x62:
-            case 0x63:
-            case 0x64:
-            case 0x65:
-            case 0x66:
-            case 0x67:
-            case 0x68:
-            case 0x69:
-            case 0x6a:
-            case 0x6b:
-            case 0x6c:
-            case 0x6d:
-            case 0x6e:
-            case 0x6f:
-                altmem = ((z >> 2) & 0x1ffc) | 0x4000;
+            case 0x60 ... 0x6F: // 16
+                altmem = ((z >> 2) & 0x1FFC) | 0x4000;
                 break;
-            case 0x70:
-            case 0x71:
-            case 0x72:
-            case 0x73:
-            case 0x74:
-            case 0x75:
-            case 0x76:
-            case 0x77:
-                altmem = ((z >> 1) & 0x1ffc) | 0x6000;
+            case 0x70 ... 0x77: // 8
+                altmem = ((z >> 1) & 0x1FFC) | 0x6000;
                 break;
-            case 0x78:
-            case 0x79:
-            case 0x7a:
-            case 0x7b:
-                altmem = (z & 0x1ffc) | 0x8000;
+            case 0x78 ... 0x7B: // 4
+                altmem = ((z >> 0) & 0x1FFC) | 0x8000;
                 break;
-            case 0x7c:
-            case 0x7d:
-                altmem = ((z << 1) & 0x1ffc) | 0xa000;
+            case 0x7C ... 0x7D: // 2
+                altmem = ((z << 1) & 0x1FFC) | 0xA000;
                 break;
-            case 0x7e:
-                altmem = ((z << 2) & 0x1ffc) | 0xc000;
+            case 0x7e: // 1
+                altmem = ((z << 2) & 0x1FFC) | 0xC000;
                 break;
-            case 0x7f:
-                altmem = ((z << 2) & 0x1ffc) | 0xe000;
-                break;
-            default:
-                msg_error("z_build_com_table failed");
+            case 0x7f: // 1
+                altmem = ((z << 2) & 0x1FFC) | 0xE000;
                 break;
         }
-
         z_com_table[z] = altmem;
     }
 }
@@ -193,7 +66,7 @@ z_build_com_table(void)
 static STRICTINLINE void
 z_store(uint32_t zcurpixel, uint32_t z, int dzpixenc)
 {
-    uint16_t zval = z_com_table[z & 0x3ffff] | (uint16_t)(dzpixenc >> 2);
+    uint16_t zval = z_com_table[z & 0x3FFFF] | (uint16_t)(dzpixenc >> 2);
     uint8_t hval = dzpixenc & 3;
 
     rdram_write_pair16(zcurpixel, zval, hval, 0);
@@ -202,147 +75,147 @@ z_store(uint32_t zcurpixel, uint32_t z, int dzpixenc)
 static STRICTINLINE uint32_t
 dz_decompress(uint32_t dz_compressed)
 {
-    return (1 << dz_compressed);
+    return 1 << dz_compressed;
 }
 
 static STRICTINLINE uint32_t
 dz_compress(uint32_t value)
 {
-    int j = 0;
-    if (value & 0xff00)
+    // Integer log2, valid only for powers of 2
+    uint32_t j = 0;
+    if (value & 0xFF00)
         j |= 8;
-    if (value & 0xf0f0)
+    if (value & 0xF0F0)
         j |= 4;
-    if (value & 0xcccc)
+    if (value & 0xCCCC)
         j |= 2;
-    if (value & 0xaaaa)
+    if (value & 0xAAAA)
         j |= 1;
     return j;
 }
+
+#define ZMODE_OPA   0
+#define ZMODE_INTER 1
+#define ZMODE_XLU   2
+#define ZMODE_DEC   3
 
 static STRICTINLINE uint32_t
 z_compare(struct rdp_state *wstate, uint32_t zcurpixel, uint32_t sz, uint16_t dzpix, int dzpixenc, uint32_t *blend_en,
           uint32_t *prewrap, uint32_t *curpixel_cvg, uint32_t curpixel_memcvg)
 {
-
-    int force_coplanar = 0;
-    sz &= 0x3ffff;
-
-    uint8_t hval;
-    uint16_t zval;
-    uint32_t oz, dzmem;
-    int32_t rawdzmem;
+    bool overflow = (curpixel_memcvg + *curpixel_cvg) & 8;
+    *prewrap = overflow;
 
     if (wstate->other_modes.z_compare_en) {
+        uint8_t hval;
+        uint16_t zval;
         PAIRREAD16(zval, hval, zcurpixel);
-        oz = z_decompress(zval);
-        rawdzmem = ((zval & 3) << 2) | hval;
-        dzmem = dz_decompress(rawdzmem);
 
+        sz &= 0x3ffff; // u15.3
+        uint32_t oz = z_decompress(zval);
+
+        int32_t rawdzmem = ((zval & 3) << 2) | hval; // 2 bits rdram, 2 bits hidden rdram
+        uint32_t dzmem = dz_decompress(rawdzmem);
+
+        // determine blender shifter signals
         if (wstate->other_modes.f.realblendershiftersneeded) {
             wstate->blshifta = clamp(dzpixenc - rawdzmem, 0, 4);
             wstate->blshiftb = clamp(rawdzmem - dzpixenc, 0, 4);
         }
 
         if (wstate->other_modes.f.interpixelblendershiftersneeded) {
+            // off-by-1 bug, blender shifters use previous pixel dzmem in first cycle of 2-cycle mode
             wstate->pastblshifta = clamp(dzpixenc - wstate->pastrawdzmem, 0, 4);
             wstate->pastblshiftb = clamp(wstate->pastrawdzmem - dzpixenc, 0, 4);
         }
 
         wstate->pastrawdzmem = rawdzmem;
 
-        int precision_factor = (zval >> 13) & 0xf;
+        int zval_exponent = (zval >> 13) & 0xf;
 
-        uint32_t dzmemmodifier;
-        if (precision_factor < 3) {
-            if (dzmem != 0x8000) {
-                dzmemmodifier = 16 >> precision_factor;
-                dzmem <<= 1;
-                if (dzmem < dzmemmodifier)
-                    dzmem = dzmemmodifier;
-
-            } else {
-                force_coplanar = 1;
+        bool force_coplanar = false;
+        // if small exponent, modify dzmem ?
+        if (zval_exponent < 3) {
+            if (dzmem == 0x8000) { // maximum dzmem
+                force_coplanar = true;
                 dzmem = 0xffff;
+            } else {
+                dzmem = MAX(dzmem << 1, 16 >> zval_exponent);
             }
         }
 
-        uint32_t dznew = (uint32_t)deltaz_comparator_lut[dzpix | dzmem];
+        bool max = oz == 0x3ffff;
+        bool infront = sz < oz;
 
+        // Finds largest power of two <= (dzpix | dzmem)
+        uint32_t dznew = (uint32_t)deltaz_comparator_lut[dzpix | dzmem];
         uint32_t dznotshift = dznew;
         dznew <<= 3;
 
-        uint32_t farther = force_coplanar || ((sz + dznew) >= oz);
+        uint32_t sum = sz + dznew;
+        int32_t diff = (int32_t)sz - (int32_t)dznew;
 
-        int overflow = (curpixel_memcvg + *curpixel_cvg) & 8;
+        // coplanar OR sz - dz is not behind oz
+        bool nearer = force_coplanar || (diff <= (int32_t)oz);
+        // coplanar OR sz + dz is behind oz
+        bool farther = force_coplanar || (sum >= oz);
+
         *blend_en = wstate->other_modes.force_blend || (!overflow && wstate->other_modes.antialias_en && farther);
 
-        *prewrap = overflow;
-
-        int cvgcoeff = 0;
-        uint32_t dzenc = 0;
-
-        int32_t diff;
-        uint32_t nearer, max, infront;
-
         switch (wstate->other_modes.z_mode) {
-            case ZMODE_OPAQUE:
-                infront = sz < oz;
-                diff = (int32_t)sz - (int32_t)dznew;
-                nearer = force_coplanar || (diff <= (int32_t)oz);
-                max = (oz == 0x3ffff);
-                return (max || (overflow ? infront : nearer));
-                break;
-            case ZMODE_INTERPENETRATING:
-                infront = sz < oz;
-                if (!infront || !farther || !overflow) {
-                    diff = (int32_t)sz - (int32_t)dznew;
-                    nearer = force_coplanar || (diff <= (int32_t)oz);
-                    max = (oz == 0x3ffff);
-                    return (max || (overflow ? infront : nearer));
-                } else {
-                    dzenc = dz_compress(dznotshift & 0xffff);
-                    cvgcoeff = ((oz >> dzenc) - (sz >> dzenc)) & 0xf;
+            case_no_default;
+
+            case ZMODE_INTER:
+                // pass the sz < oz test
+                // coplanar or sz + dz is behind oz
+                // (old_cvg + new_cvg) overflows
+                if (infront && farther && overflow) {
+                    // Modify pixel coverage for possible antialiasing
+                    uint32_t dzenc = dz_compress(dznotshift & 0xffff);
+                    int cvgcoeff = ((oz >> dzenc) - (sz >> dzenc)) & 0xf;
                     *curpixel_cvg = ((cvgcoeff * (*curpixel_cvg)) >> 3) & 0xf;
-                    return 1;
+                    return true;
                 }
-                break;
-            case ZMODE_TRANSPARENT:
-                infront = sz < oz;
-                max = (oz == 0x3ffff);
+                // Fallthrough to opaque z mode otherwise
+                FALLTHROUGH;
+            case ZMODE_OPA:
+                // z-buffer is empty or
+                // overflow:
+                //   sz < oz
+                // else:
+                //   sz <= oz within dz threshold
+                return max || (overflow ? infront : nearer);
+
+            case ZMODE_XLU:
+                // Transparent surface: new < old or old is max depth
                 return (infront || max);
-                break;
-            case ZMODE_DECAL:
-                diff = (int32_t)sz - (int32_t)dznew;
-                nearer = force_coplanar || (diff <= (int32_t)oz);
-                max = (oz == 0x3ffff);
-                return (farther && nearer && !max);
-                break;
+
+            case ZMODE_DEC:
+                // z-buffer is NOT empty AND sz falls within the dz threshold of oz in either direction
+                return farther && nearer && !max;
         }
-        return 0;
     } else {
 
         if (wstate->other_modes.f.realblendershiftersneeded) {
             wstate->blshifta = 0;
-            if (dzpixenc < 0xb)
+            if (dzpixenc < 11) // Clamp the shift between [0,4]
                 wstate->blshiftb = 4;
             else
-                wstate->blshiftb = 0xf - dzpixenc;
+                wstate->blshiftb = 15 - dzpixenc;
         }
 
         if (wstate->other_modes.f.interpixelblendershiftersneeded) {
+            // Off-by-1 hardware bug, blender shifters use prev pixel dz in first cycle of 2-cycle mode
             wstate->pastblshifta = 0;
-            if (dzpixenc < 0xb)
+            if (dzpixenc < 11)
                 wstate->pastblshiftb = 4;
             else
-                wstate->pastblshiftb = 0xf - dzpixenc;
+                wstate->pastblshiftb = 15 - dzpixenc;
         }
 
-        wstate->pastrawdzmem = 0xf;
+        wstate->pastrawdzmem = 15;
 
-        int overflow = (curpixel_memcvg + *curpixel_cvg) & 8;
         *blend_en = wstate->other_modes.force_blend || (!overflow && wstate->other_modes.antialias_en);
-        *prewrap = overflow;
 
         return 1;
     }
