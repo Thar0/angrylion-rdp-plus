@@ -8,7 +8,7 @@
 
 #define MSG_BUFFER_LEN 256
 
-void
+NORETURN void
 msg_error(const char *err, ...)
 {
     va_list arg;

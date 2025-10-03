@@ -335,7 +335,7 @@ struct rdp_state {
     struct n64video_pixel divot_array[0xa10 << 1];
 };
 
-struct rdp_state state[PARALLEL_MAX_WORKERS];
+static struct rdp_state state[PARALLEL_MAX_WORKERS];
 
 static int32_t one_color = 0x100;
 static int32_t zero_color = 0x00;

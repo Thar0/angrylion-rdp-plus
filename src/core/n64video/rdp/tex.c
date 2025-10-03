@@ -372,7 +372,7 @@ loading_pipeline(struct rdp_state *wstate, int start, int end, int tilenum, int 
 
     int s, t;
     int ss, st;
-    int xstart, xend, xendsc;
+    int xstart, xend;
     int sss = 0, sst = 0;
     int ti_index, length;
 
@@ -426,7 +426,6 @@ loading_pipeline(struct rdp_state *wstate, int start, int end, int tilenum, int 
     for (i = start; i <= end; i++) {
         xstart = wstate->span[i].lx;
         xend = wstate->span[i].unscrx;
-        xendsc = wstate->span[i].rx;
         s = wstate->span[i].s;
         t = wstate->span[i].t;
 
@@ -583,22 +582,19 @@ edgewalker_for_loads(struct rdp_state *wstate, int32_t *lewdata)
 {
     int j = 0;
     int xleft = 0, xright = 0;
-    int /*xstart = 0,*/ xend = 0;
-    int s = 0, t = 0, w = 0;
-    int dsdx = 0, dtdx = 0;
-    int dsdy = 0, dtdy = 0;
-    int dsde = 0, dtde = 0;
-    int tilenum = 0, flip = 0;
+    int xend = 0;
+    int s = 0, t = 0;
+    int dsdx = 0;
+    int dtdx = 0;
+    int dtde = 0;
     int32_t yl = 0, ym = 0, yh = 0;
     int32_t xl = 0, xm = 0, xh = 0;
-    int32_t dxldy = 0, dxhdy = 0, dxmdy = 0;
 
     int cmd_id = CMD_ID(lewdata);
     int ltlut = (cmd_id == CMD_ID_LOAD_TLUT);
     int coord_quad = ltlut || (cmd_id == CMD_ID_LOAD_BLOCK);
-    flip = 1;
+    int tilenum = (lewdata[0] >> 16) & 7;
     wstate->max_level = 0;
-    tilenum = (lewdata[0] >> 16) & 7;
 
     yl = SIGN(lewdata[0], 14);
     ym = lewdata[1] >> 16;
@@ -609,19 +605,11 @@ edgewalker_for_loads(struct rdp_state *wstate, int32_t *lewdata)
     xh = SIGN(lewdata[3], 28);
     xm = SIGN(lewdata[4], 28);
 
-    dxldy = 0;
-    dxhdy = 0;
-    dxmdy = 0;
-
     s = lewdata[5] & 0xffff0000;
     t = (lewdata[5] & 0xffff) << 16;
-    w = 0;
     dsdx = (lewdata[7] & 0xffff0000) | ((lewdata[6] >> 16) & 0xffff);
     dtdx = ((lewdata[7] << 16) & 0xffff0000) | (lewdata[6] & 0xffff);
-    dsde = 0;
     dtde = (lewdata[9] & 0xffff) << 16;
-    dsdy = 0;
-    dtdy = (lewdata[8] & 0xffff) << 16;
 
     wstate->spans_ds = dsdx & ~0x1f;
     wstate->spans_dt = dtdx & ~0x1f;
@@ -632,12 +620,6 @@ edgewalker_for_loads(struct rdp_state *wstate, int32_t *lewdata)
 
     int k = 0;
 
-    // int sign_dxhdy = 0;
-
-    // int do_offset = 0;
-
-    int xfrac = 0;
-
     int32_t maxxmx = 0, minxhx = 0;
 
     int spix = 0;
@@ -645,12 +627,10 @@ edgewalker_for_loads(struct rdp_state *wstate, int32_t *lewdata)
     int ylfar = yl | 3;
 
     int valid_y = 1;
-    // int length = 0;
-    int32_t xrsc = 0, xlsc = 0 /*, stickybit = 0*/;
+    int32_t xrsc = 0, xlsc = 0;
     int32_t yllimit = yl;
     int32_t yhlimit = yh;
 
-    xfrac = 0;
     xend = xright >> 16;
 
     for (k = ycur; k <= ylfar; k++) {

@@ -354,7 +354,7 @@ rdp_set_mask_image(struct rdp_state *wstate, const uint32_t *args)
     wstate->zb_address = args[1] & 0x0ffffff;
 }
 
-void
+static void
 z_init_lut(void)
 {
     int i;

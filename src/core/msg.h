@@ -1,6 +1,7 @@
 #pragma once
+#include "common.h"
 
-void
+NORETURN void
 msg_error(const char *err, ...);
 void
 msg_warning(const char *err, ...);

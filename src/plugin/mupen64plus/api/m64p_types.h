@@ -30,7 +30,7 @@
 /* necessary headers */
 #include <stdint.h>
 #if defined(WIN32)
-#include <windows.h>
+#include <Windows.h>
 #endif
 
 /* DLL handles and function declaration specifiers */

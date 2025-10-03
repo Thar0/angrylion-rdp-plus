@@ -13,7 +13,7 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <windows.h>
+#include <Windows.h>
 
 #ifdef CODEGEN_FUNCPTR
 #undef CODEGEN_FUNCPTR

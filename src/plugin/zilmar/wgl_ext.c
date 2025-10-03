@@ -118,7 +118,7 @@ ProcExtsFromExtString(const char *strExtList)
         if (iStrLen > 255)
             return;
 
-        strncpy(strWorkBuff, strCurrPos, iStrLen);
+        strncpy(strWorkBuff, strCurrPos, (size_t)iStrLen);
         strWorkBuff[iStrLen] = '\0';
 
         LoadExtByName(strWorkBuff);

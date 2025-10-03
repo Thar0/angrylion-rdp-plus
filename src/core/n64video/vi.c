@@ -527,6 +527,10 @@ vi_process_fast_parallel(uint32_t worker_id)
             struct n64video_pixel *pixel = &pixel_row[x];
 
             switch (config.vi.mode) {
+                case VI_MODE_NORMAL:
+                case VI_MODE_NUM:
+                    break;
+
                 case VI_MODE_COLOR:
                     switch (ctrl.type) {
                         case VI_TYPE_RGBA5551:
@@ -550,17 +554,14 @@ vi_process_fast_parallel(uint32_t worker_id)
                         default:
                             return;
                     }
-
                     gamma_filters(pixel, ctrl.gamma_enable, false, &state[worker_id].vi_rseed);
                     break;
 
                 case VI_MODE_DEPTH:
-                    {
-                        if (zb_address) {
-                            pixel->r = pixel->g = pixel->b = rdram_read_idx16((zb_address >> 1) + line + x) >> 8;
-                        }
-                        break;
+                    if (zb_address) {
+                        pixel->r = pixel->g = pixel->b = rdram_read_idx16((zb_address >> 1) + line + x) >> 8;
                     }
+                    break;
 
                 case VI_MODE_COVERAGE:
                     {
@@ -569,11 +570,8 @@ vi_process_fast_parallel(uint32_t worker_id)
                         uint16_t pix;
                         rdram_read_pair16(&pix, &hval, (frame_buffer >> 1) + line + x);
                         pixel->r = pixel->g = pixel->b = (((pix & 1) << 2) | hval) << 5;
-                        break;
                     }
-
-                default:
-                    return;
+                    break;
             }
         }
     }
@@ -630,7 +628,7 @@ vi_process_fast(struct n64video_frame_buffer *fb)
     return fb->width > 0 && fb->height > 0;
 }
 
-void
+static void
 vi_set_zbuffer_address(uint32_t address)
 {
     zb_address = address;

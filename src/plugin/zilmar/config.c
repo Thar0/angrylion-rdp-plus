@@ -7,7 +7,7 @@
 #include "output/screen.h"
 #include "output/vdac.h"
 
-#include <Commctrl.h>
+#include <CommCtrl.h>
 #include <Shlwapi.h>
 
 #include <stdio.h>
@@ -34,9 +34,10 @@
 
 #define CONFIG_FILE_NAME CORE_SIMPLE_NAME "-config.ini"
 
-#define CONFIG_DLG_INIT_CHECKBOX(id, var, config) \
-    var = GetDlgItem(hwnd, id);                   \
-    SendMessage(var, BM_SETCHECK, (WPARAM)config, 0);
+#define CONFIG_DLG_INIT_CHECKBOX(id, var, config)     \
+    var = GetDlgItem(hwnd, id);                       \
+    SendMessage(var, BM_SETCHECK, (WPARAM)config, 0); \
+    (void)0
 
 static HINSTANCE inst;
 static struct n64video_config config;
@@ -45,7 +46,6 @@ static char config_path[MAX_PATH + 1];
 
 static HWND dlg_combo_vi_mode;
 static HWND dlg_combo_vi_interp;
-static HWND dlg_check_trace;
 static HWND dlg_check_multithread;
 static HWND dlg_check_vi_widescreen;
 static HWND dlg_check_vi_overscan;
@@ -83,7 +83,7 @@ config_dialog_fill_combo(HWND dialog, char **entries, size_t num_entries, uint32
     SendMessage(dialog, CB_SETCURSEL, (WPARAM)selected, 0);
 }
 
-INT_PTR CALLBACK
+static INT_PTR CALLBACK
 config_dialog_proc(HWND hwnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
 {
     UNUSED(lParam);
@@ -103,7 +103,7 @@ config_dialog_proc(HWND hwnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
                 };
 
                 dlg_combo_vi_mode = GetDlgItem(hwnd, IDC_COMBO_VI_MODE);
-                config_dialog_fill_combo(dlg_combo_vi_mode, vi_mode_strings, VI_MODE_NUM, config.vi.mode);
+                config_dialog_fill_combo(dlg_combo_vi_mode, vi_mode_strings, VI_MODE_NUM, (uint32_t)config.vi.mode);
 
                 char *vi_interp_strings[] = {
                     "Blocky (nearest-neighbor)", // VI_INTERP_NEAREST
@@ -112,7 +112,7 @@ config_dialog_proc(HWND hwnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
                 };
 
                 dlg_combo_vi_interp = GetDlgItem(hwnd, IDC_COMBO_VI_INTERP);
-                config_dialog_fill_combo(dlg_combo_vi_interp, vi_interp_strings, VI_INTERP_NUM, config.vi.interp);
+                config_dialog_fill_combo(dlg_combo_vi_interp, vi_interp_strings, VI_INTERP_NUM, (uint32_t)config.vi.interp);
 
                 char *dp_compat_strings[] = {
                     "Fast, most glitches",     // DP_COMPAT_LOW
@@ -121,7 +121,7 @@ config_dialog_proc(HWND hwnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
                 };
 
                 dlg_combo_dp_compat = GetDlgItem(hwnd, IDC_COMBO_DP_COMPAT);
-                config_dialog_fill_combo(dlg_combo_dp_compat, dp_compat_strings, DP_COMPAT_NUM, config.dp.compat);
+                config_dialog_fill_combo(dlg_combo_dp_compat, dp_compat_strings, DP_COMPAT_NUM, (uint32_t)config.dp.compat);
 
                 CONFIG_DLG_INIT_CHECKBOX(IDC_CHECK_MULTITHREAD, dlg_check_multithread, config.parallel);
                 CONFIG_DLG_INIT_CHECKBOX(IDC_CHECK_VI_WIDESCREEN, dlg_check_vi_widescreen, config.vi.widescreen);
@@ -184,6 +184,7 @@ config_dialog_proc(HWND hwnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
                         if (cmdid == IDAPPLY) {
                             break;
                         }
+                        FALLTHROUGH;
                     case IDCANCEL:
                         EndDialog(hwnd, 0);
                         break;
@@ -259,7 +260,7 @@ config_get(void)
 }
 
 bool
-config_load()
+config_load(void)
 {
     FILE *fp = fopen(config_path, "r");
     if (!fp) {

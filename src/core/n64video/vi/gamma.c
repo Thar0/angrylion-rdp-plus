@@ -59,7 +59,7 @@ gamma_filters(struct n64video_pixel *pixel, bool gamma_enable, bool gamma_dither
     }
 }
 
-void
+static void
 vi_gamma_init(void)
 {
     int i;

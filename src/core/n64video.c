@@ -205,11 +205,16 @@ n64video_init(struct n64video_config *_config)
     switch (config.dp.compat) {
         case DP_COMPAT_HIGH:
             rdp_cmd_sync[CMD_ID_SET_TEXTURE_IMAGE] = true;
+            FALLTHROUGH;
         case DP_COMPAT_MEDIUM:
             rdp_cmd_sync[CMD_ID_SET_MASK_IMAGE] = true;
             rdp_cmd_sync[CMD_ID_SET_COLOR_IMAGE] = true;
+            FALLTHROUGH;
         case DP_COMPAT_LOW:
             rdp_cmd_sync[CMD_ID_SYNC_FULL] = true;
+            FALLTHROUGH;
+        case DP_COMPAT_NUM:
+            break;
     }
 
     // init internals

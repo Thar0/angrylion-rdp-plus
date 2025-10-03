@@ -14,9 +14,9 @@ parallel_init(uint32_t num, bool busy);
 void
 parallel_run(void task(uint32_t));
 uint32_t
-parallel_num_workers();
+parallel_num_workers(void);
 void
-parallel_close();
+parallel_close(void);
 
 #ifdef __cplusplus
 }

@@ -31,7 +31,7 @@ static bool m_fullscreen;
 static bool m_exclusive;
 
 // Win32 helpers
-void
+static void
 win32_client_resize(HWND hWnd, HWND hStatus, int32_t nWidth, int32_t nHeight)
 {
     RECT rclient;
@@ -138,24 +138,19 @@ screen_init(struct n64video_config *config)
                                       0 };
 
     m_dc = GetDC(gfx.hWnd);
-    if (!m_dc) {
+    if (!m_dc)
         msg_error("Can't get device context.");
-        return;
-    }
 
     int32_t win_pf = ChoosePixelFormat(m_dc, &win_pfd);
-    if (!win_pf) {
+    if (!win_pf)
         msg_error("Can't choose pixel format.");
-        return;
-    }
+
     SetPixelFormat(m_dc, win_pf, &win_pfd);
 
     // create legacy context, required for wglGetProcAddress to work properly
     m_glrc = wglCreateContext(m_dc);
-    if (!m_glrc || !wglMakeCurrent(m_dc, m_glrc)) {
+    if (!m_glrc || !wglMakeCurrent(m_dc, m_glrc))
         msg_error("Can't create OpenGL context.");
-        return;
-    }
 
     // load wgl extension
     wgl_LoadFunctions(m_dc);
@@ -210,6 +205,7 @@ screen_adjust(int32_t width_out, int32_t height_out, int32_t *width, int32_t *he
     int32_t win_x = 0;
     int32_t win_y = statusrect.bottom;
 
+#if 0   // TODO figure out what was meant here, the condition is always false
     // adjust windowed size after the output size has changed so that
     // the output remains pixel-perfect until the user changes the window size
     if (win_width != win_width || win_height != win_height) {
@@ -231,6 +227,7 @@ screen_adjust(int32_t width_out, int32_t height_out, int32_t *width, int32_t *he
             win32_client_resize(gfx.hWnd, gfx.hStatusBar, win_width_tmp, win_height_tmp);
         }
     }
+    #endif
 
     *width = win_width;
     *height = win_height;

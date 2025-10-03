@@ -71,7 +71,7 @@ get_rom_name(void)
     // TODO: convert Shift_JIS string to UTF-16 for Win32 API?
     int i = 0;
     for (; i < 20; i++) {
-        rom_name[i] = filter_char(gfx.HEADER[(32 + i) ^ BYTE_ADDR_XOR]);
+        rom_name[i] = filter_char((char)gfx.HEADER[(32 + i) ^ BYTE_ADDR_XOR]);
     }
 
     // make sure there's at least one whitespace that will terminate the string
@@ -90,7 +90,7 @@ get_rom_name(void)
         // game title is empty or invalid, use safe fallback using the
         // four-character game ID
         for (; i < 4; i++) {
-            rom_name[i] = filter_char(gfx.HEADER[(59 + i) ^ BYTE_ADDR_XOR]);
+            rom_name[i] = filter_char((char)gfx.HEADER[(59 + i) ^ BYTE_ADDR_XOR]);
         }
     }
 
@@ -116,8 +116,8 @@ write_screenshot(char *path)
     // prepare bitmap headers
     BITMAPINFOHEADER ihdr = { 0 };
     ihdr.biSize = sizeof(ihdr);
-    ihdr.biWidth = fb.width;
-    ihdr.biHeight = fb.height;
+    ihdr.biWidth = (int)fb.width;
+    ihdr.biHeight = (int)fb.height;
     ihdr.biPlanes = 1;
     ihdr.biBitCount = 32;
     ihdr.biSizeImage = fb.width * fb.height * sizeof(int32_t);
@@ -139,7 +139,7 @@ write_screenshot(char *path)
     fwrite(&ihdr, sizeof(ihdr), 1, fp);
 
     // write bitmap contents
-    fseek(fp, fhdr.bfOffBits, SEEK_SET);
+    fseek(fp, (long)fhdr.bfOffBits, SEEK_SET);
 
     fb.pixels = malloc(ihdr.biSizeImage);
     vdac_read(&fb, true);

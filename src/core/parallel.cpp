@@ -163,18 +163,18 @@ public:
     {
     }
 
-    virtual void create_worker(std::uint32_t worker_id)
+    virtual void create_worker(std::uint32_t worker_id) override
     {
         m_workers.emplace_back(std::thread(&ParallelBusy::do_work, this, worker_id));
     }
 
-    virtual void start_work()
+    virtual void start_work() override
     {
         // clear task bits for all workers
         m_tasks_done = 0;
     }
 
-    virtual void do_work(std::uint32_t worker_id)
+    virtual void do_work(std::uint32_t worker_id) override
     {
         const std::uint64_t worker_mask = 1LL << worker_id;
 
@@ -192,7 +192,7 @@ public:
         }
     }
 
-    virtual void wait()
+    virtual void wait() override
     {
         while (m_tasks_done != m_all_tasks_done) {
             std::this_thread::yield();
@@ -219,12 +219,12 @@ void parallel_run(void task(uint32_t))
     parallel->run(task);
 }
 
-uint32_t parallel_num_workers()
+uint32_t parallel_num_workers(void)
 {
     return parallel->num_workers();
 }
 
-void parallel_close()
+void parallel_close(void)
 {
     parallel.reset();
 }

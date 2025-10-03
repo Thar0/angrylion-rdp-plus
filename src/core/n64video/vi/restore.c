@@ -122,8 +122,8 @@ restore_filter32(int *r, int *g, int *b, uint32_t fboffset, uint32_t num, uint32
     *b = bend;
 }
 
-void
-vi_restore_init()
+static void
+vi_restore_init(void)
 {
     int i;
     for (i = 0; i < 0x400; i++) {

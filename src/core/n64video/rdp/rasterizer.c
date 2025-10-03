@@ -169,7 +169,7 @@ z_correct(struct rdp_state *wstate, int offx, int offy, int *z, uint32_t cvg)
     }
 }
 
-void
+static void
 rejected_hbwrite_1cycle(struct rdp_state *wstate, int cdith, uint32_t blend_en, uint32_t prewrap, uint32_t curpixel,
                         uint32_t curpixel_cvg, uint32_t curpixel_memcvg, int flip, int *delayedhbwidx)
 {
@@ -239,7 +239,7 @@ rejected_hbwrite_1cycle(struct rdp_state *wstate, int cdith, uint32_t blend_en, 
     }
 }
 
-void
+static void
 rejected_hbwrite_2cycle(struct rdp_state *wstate, int cdith, uint32_t blend_en, uint32_t prewrap, uint32_t curpixel,
                         uint32_t curpixel_cvg, uint32_t curpixel_memcvg, int flip, int *delayedhbwidx)
 {
@@ -1685,13 +1685,11 @@ render_spans_fill(struct rdp_state *wstate, int start, int end, int flip)
     int xinc = flip ? 1 : -1;
 
     int xstart = 0, xendsc;
-    int prevxstart;
     int curpixel = 0;
     int x, length;
     int delayedhbwidx = -1;
 
     for (i = start; i <= end; i++) {
-        prevxstart = xstart;
         xstart = wstate->span[i].lx;
         xendsc = wstate->span[i].rx;
 
@@ -1777,7 +1775,7 @@ render_spans_copy(struct rdp_state *wstate, int start, int end, int tilenum, int
     int copywmask = 0, alphamask = 0;
     int bytesperpixel = (wstate->fb_size == PIXEL_SIZE_4BIT) ? 1 : (1 << (wstate->fb_size - 1));
     uint32_t fbendptr = 0;
-    int32_t threshold, currthreshold;
+    uint32_t threshold, currthreshold;
     int delayedhbwidx = -1;
 
 #define PIXELS_TO_BYTES_SPECIAL4(pix, siz) ((siz) ? PIXELS_TO_BYTES(pix, siz) : (pix))
@@ -1872,7 +1870,7 @@ render_spans_copy(struct rdp_state *wstate, int start, int end, int tilenum, int
 }
 
 static void
-edgewalker_for_prims(struct rdp_state *wstate, int32_t *ewdata)
+edgewalker_for_prims(struct rdp_state *wstate, uint32_t *ewdata)
 {
     int j = 0;
     int xleft = 0, xright = 0, xleft_inc = 0, xright_inc = 0;
@@ -2063,7 +2061,7 @@ edgewalker_for_prims(struct rdp_state *wstate, int32_t *ewdata)
         wstate->span[j].b = ((b & ~0x1ff) + dbdiff - (xfrac * dbdxh)) & ~0x3ff; \
         wstate->span[j].a = ((a & ~0x1ff) + dadiff - (xfrac * dadxh)) & ~0x3ff; \
         wstate->span[j].z = ((z & ~0x1ff) + dzdiff - (xfrac * dzdxh)) & ~0x3ff; \
-    }
+    }(void)0
 
 #define ADDVALUES_PRIM() \
     {                    \
@@ -2075,7 +2073,7 @@ edgewalker_for_prims(struct rdp_state *wstate, int32_t *ewdata)
         b += dbde;       \
         a += dade;       \
         z += dzde;       \
-    }
+    }(void)0
 
     int32_t maxxmx = 0, minxmx = 0, maxxhx = 0, minxhx = 0;
 
@@ -2339,41 +2337,41 @@ rasterizer_init(struct rdp_state *wstate)
 void
 rdp_tri_noshade(struct rdp_state *wstate, const uint32_t *args)
 {
-    int32_t ewdata[CMD_MAX_INTS];
-    memcpy(&ewdata[0], args, 8 * sizeof(int32_t));
-    memset(&ewdata[8], 0, 36 * sizeof(int32_t));
+    uint32_t ewdata[CMD_MAX_INTS];
+    memcpy(&ewdata[0], args, 8 * sizeof(uint32_t));
+    memset(&ewdata[8], 0, 36 * sizeof(uint32_t));
     edgewalker_for_prims(wstate, ewdata);
 }
 
 void
 rdp_tri_noshade_z(struct rdp_state *wstate, const uint32_t *args)
 {
-    int32_t ewdata[CMD_MAX_INTS];
-    memcpy(&ewdata[0], args, 8 * sizeof(int32_t));
-    memset(&ewdata[8], 0, 32 * sizeof(int32_t));
-    memcpy(&ewdata[40], args + 8, 4 * sizeof(int32_t));
+    uint32_t ewdata[CMD_MAX_INTS];
+    memcpy(&ewdata[0], args, 8 * sizeof(uint32_t));
+    memset(&ewdata[8], 0, 32 * sizeof(uint32_t));
+    memcpy(&ewdata[40], args + 8, 4 * sizeof(uint32_t));
     edgewalker_for_prims(wstate, ewdata);
 }
 
 void
 rdp_tri_tex(struct rdp_state *wstate, const uint32_t *args)
 {
-    int32_t ewdata[CMD_MAX_INTS];
-    memcpy(&ewdata[0], args, 8 * sizeof(int32_t));
-    memset(&ewdata[8], 0, 16 * sizeof(int32_t));
-    memcpy(&ewdata[24], args + 8, 16 * sizeof(int32_t));
-    memset(&ewdata[40], 0, 4 * sizeof(int32_t));
+    uint32_t ewdata[CMD_MAX_INTS];
+    memcpy(&ewdata[0], args, 8 * sizeof(uint32_t));
+    memset(&ewdata[8], 0, 16 * sizeof(uint32_t));
+    memcpy(&ewdata[24], args + 8, 16 * sizeof(uint32_t));
+    memset(&ewdata[40], 0, 4 * sizeof(uint32_t));
     edgewalker_for_prims(wstate, ewdata);
 }
 
 void
 rdp_tri_tex_z(struct rdp_state *wstate, const uint32_t *args)
 {
-    int32_t ewdata[CMD_MAX_INTS];
-    memcpy(&ewdata[0], args, 8 * sizeof(int32_t));
-    memset(&ewdata[8], 0, 16 * sizeof(int32_t));
-    memcpy(&ewdata[24], args + 8, 16 * sizeof(int32_t));
-    memcpy(&ewdata[40], args + 24, 4 * sizeof(int32_t));
+    uint32_t ewdata[CMD_MAX_INTS];
+    memcpy(&ewdata[0], args, 8 * sizeof(uint32_t));
+    memset(&ewdata[8], 0, 16 * sizeof(uint32_t));
+    memcpy(&ewdata[24], args + 8, 16 * sizeof(uint32_t));
+    memcpy(&ewdata[40], args + 24, 4 * sizeof(uint32_t));
 
     edgewalker_for_prims(wstate, ewdata);
 }
@@ -2381,35 +2379,35 @@ rdp_tri_tex_z(struct rdp_state *wstate, const uint32_t *args)
 void
 rdp_tri_shade(struct rdp_state *wstate, const uint32_t *args)
 {
-    int32_t ewdata[CMD_MAX_INTS];
-    memcpy(&ewdata[0], args, 24 * sizeof(int32_t));
-    memset(&ewdata[24], 0, 20 * sizeof(int32_t));
+    uint32_t ewdata[CMD_MAX_INTS];
+    memcpy(&ewdata[0], args, 24 * sizeof(uint32_t));
+    memset(&ewdata[24], 0, 20 * sizeof(uint32_t));
     edgewalker_for_prims(wstate, ewdata);
 }
 
 void
 rdp_tri_shade_z(struct rdp_state *wstate, const uint32_t *args)
 {
-    int32_t ewdata[CMD_MAX_INTS];
-    memcpy(&ewdata[0], args, 24 * sizeof(int32_t));
-    memset(&ewdata[24], 0, 16 * sizeof(int32_t));
-    memcpy(&ewdata[40], args + 24, 4 * sizeof(int32_t));
+    uint32_t ewdata[CMD_MAX_INTS];
+    memcpy(&ewdata[0], args, 24 * sizeof(uint32_t));
+    memset(&ewdata[24], 0, 16 * sizeof(uint32_t));
+    memcpy(&ewdata[40], args + 24, 4 * sizeof(uint32_t));
     edgewalker_for_prims(wstate, ewdata);
 }
 
 void
 rdp_tri_texshade(struct rdp_state *wstate, const uint32_t *args)
 {
-    int32_t ewdata[CMD_MAX_INTS];
-    memcpy(&ewdata[0], args, 40 * sizeof(int32_t));
-    memset(&ewdata[40], 0, 4 * sizeof(int32_t));
+    uint32_t ewdata[CMD_MAX_INTS];
+    memcpy(&ewdata[0], args, 40 * sizeof(uint32_t));
+    memset(&ewdata[40], 0, 4 * sizeof(uint32_t));
     edgewalker_for_prims(wstate, ewdata);
 }
 
 void
 rdp_tri_texshade_z(struct rdp_state *wstate, const uint32_t *args)
 {
-    int32_t ewdata[CMD_MAX_INTS];
+    uint32_t ewdata[CMD_MAX_INTS];
     memcpy(&ewdata[0], args, CMD_MAX_SIZE);
 
     edgewalker_for_prims(wstate, ewdata);
@@ -2438,7 +2436,7 @@ rdp_tex_rect(struct rdp_state *wstate, const uint32_t *args)
     uint32_t xlint = (xl >> 2) & 0x3ff;
     uint32_t xhint = (xh >> 2) & 0x3ff;
 
-    int32_t ewdata[CMD_MAX_INTS];
+    uint32_t ewdata[CMD_MAX_INTS];
     ewdata[0] = (0x24 << 24) | ((0x80 | tilenum) << 16) | yl;
     ewdata[1] = (yl << 16) | yh;
     ewdata[2] = (xlint << 16) | ((xl & 3) << 14);
@@ -2492,7 +2490,7 @@ rdp_tex_rect_flip(struct rdp_state *wstate, const uint32_t *args)
     uint32_t xlint = (xl >> 2) & 0x3ff;
     uint32_t xhint = (xh >> 2) & 0x3ff;
 
-    int32_t ewdata[CMD_MAX_INTS];
+    uint32_t ewdata[CMD_MAX_INTS];
     ewdata[0] = (0x25 << 24) | ((0x80 | tilenum) << 16) | yl;
     ewdata[1] = (yl << 16) | yh;
     ewdata[2] = (xlint << 16) | ((xl & 3) << 14);
@@ -2501,7 +2499,7 @@ rdp_tex_rect_flip(struct rdp_state *wstate, const uint32_t *args)
     ewdata[5] = 0;
     ewdata[6] = (xlint << 16) | ((xl & 3) << 14);
     ewdata[7] = 0;
-    memset(&ewdata[8], 0, 16 * sizeof(int32_t));
+    memset(&ewdata[8], 0, 16 * sizeof(uint32_t));
     ewdata[24] = (s << 16) | t;
     ewdata[25] = 0;
 
@@ -2519,7 +2517,7 @@ rdp_tex_rect_flip(struct rdp_state *wstate, const uint32_t *args)
     ewdata[37] = 0;
     ewdata[38] = (dsdx & 0x1f) << 27;
     ewdata[39] = 0;
-    memset(&ewdata[40], 0, 4 * sizeof(int32_t));
+    memset(&ewdata[40], 0, 4 * sizeof(uint32_t));
 
     edgewalker_for_prims(wstate, ewdata);
 }
@@ -2538,7 +2536,7 @@ rdp_fill_rect(struct rdp_state *wstate, const uint32_t *args)
     uint32_t xlint = (xl >> 2) & 0x3ff;
     uint32_t xhint = (xh >> 2) & 0x3ff;
 
-    int32_t ewdata[CMD_MAX_INTS];
+    uint32_t ewdata[CMD_MAX_INTS];
     ewdata[0] = (0x3680 << 16) | yl;
     ewdata[1] = (yl << 16) | yh;
     ewdata[2] = (xlint << 16) | ((xl & 3) << 14);
@@ -2547,7 +2545,7 @@ rdp_fill_rect(struct rdp_state *wstate, const uint32_t *args)
     ewdata[5] = 0;
     ewdata[6] = (xlint << 16) | ((xl & 3) << 14);
     ewdata[7] = 0;
-    memset(&ewdata[8], 0, 36 * sizeof(int32_t));
+    memset(&ewdata[8], 0, 36 * sizeof(uint32_t));
 
     edgewalker_for_prims(wstate, ewdata);
 }

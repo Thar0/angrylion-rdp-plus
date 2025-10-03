@@ -11,7 +11,11 @@ FORMAT_FILES := $(shell find src -type f -name "*.[ch]")
 OPTFLAGS := -march=x86-64-v4 -msse4.2 -mavx512f -mavx512bw -mavx512vl -O3 -ffast-math -flto
 CFLAGS   := -x c   -fno-PIC -std=gnu17 -m32 -target i386-windows-pc -fvisibility=hidden
 CXXFLAGS := -x c++ -fno-PIC -std=c++20 -m32 -target i386-windows-pc -fvisibility=hidden -fvisibility-inlines-hidden
-WARNFLAGS := -Wall -Wextra
+WARNFLAGS := -Wall -Wextra -Wshadow -Wpointer-arith -Wformat=2 -Wnull-dereference -Woverflow -Wimplicit-fallthrough
+# WARNFLAGS += -Weverything -Wno-cast-function-type-strict -Wno-reserved-macro-identifier -Wno-unsafe-buffer-usage
+# WARNFLAGS += -Wno-declaration-after-statement -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-exit-time-destructors
+# WARNFLAGS += -Wno-global-constructors -Wno-date-time -Wno-unused-macros -Wno-sign-conversion -Wno-cast-align -Wno-implicit-int-conversion
+WARNFLAGS += -Werror=implicit-int -Werror=implicit-function-declaration -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=return-type
 DEFS := -D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_WARNINGS
 INCLUDES := -Isrc
 DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
@@ -21,7 +25,7 @@ LDLIBS := -luser32 -lshlwapi -lopengl32 -lgdi32 -lmsvcrt
 
 ARFLAGS := -fuse-ld=llvm-lib
 
-CORE_DIRS := $(shell find src/core -type d)
+CORE_DIRS := $(shell find src/core -type d -not -path "src/core/n64video*")
 CORE_C_FILES   := $(foreach dir, $(CORE_DIRS), $(wildcard $(dir)/*.c))
 CORE_CXX_FILES := $(foreach dir, $(CORE_DIRS), $(wildcard $(dir)/*.cpp))
 CORE_O_FILES := $(foreach f, $(CORE_C_FILES), build/$(f:.c=.o)) $(foreach f, $(CORE_CXX_FILES), build/$(f:.cpp=.o))
