@@ -470,7 +470,7 @@ render_spans_1cycle_complete(struct rdp_state *wstate, int start, int end, int t
                 if (wstate->other_modes.f.getditherlevel < 2)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
-                combiner_1cycle(wstate, adith, &curpixel_cvg);
+                combiner_finalstage(wstate, adith, &curpixel_cvg);
 
                 wstate->fbread1_ptr(wstate, curpixel, &curpixel_memcvg);
 
@@ -646,7 +646,7 @@ render_spans_1cycle_notexel1(struct rdp_state *wstate, int start, int end, int t
                 if (wstate->other_modes.f.getditherlevel < 2)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
-                combiner_1cycle(wstate, adith, &curpixel_cvg);
+                combiner_finalstage(wstate, adith, &curpixel_cvg);
 
                 wstate->fbread1_ptr(wstate, curpixel, &curpixel_memcvg);
 
@@ -793,7 +793,7 @@ render_spans_1cycle_notex(struct rdp_state *wstate, int start, int end, int tile
                 if (wstate->other_modes.f.getditherlevel < 2)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
-                combiner_1cycle(wstate, adith, &curpixel_cvg);
+                combiner_finalstage(wstate, adith, &curpixel_cvg);
 
                 wstate->fbread1_ptr(wstate, curpixel, &curpixel_memcvg);
 
@@ -1010,7 +1010,10 @@ render_spans_2cycle_complete(struct rdp_state *wstate, int start, int end, int t
 
                 z_correct(wstate, offx, offy, &sz, curpixel_cvg);
 
-                combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
+                // Advance texture pipeline
+                wstate->texel0_color = wstate->texel1_color;
+                wstate->texel1_color = wstate->nexttexel_color;
+                combiner_finalstage(wstate, adith, &curpixel_cvg);
 
                 wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
 
@@ -1220,7 +1223,10 @@ render_spans_2cycle_notexelnext(struct rdp_state *wstate, int start, int end, in
 
                 z_correct(wstate, offx, offy, &sz, curpixel_cvg);
 
-                combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
+                // Advance texture pipeline
+                wstate->texel0_color = wstate->texel1_color;
+                wstate->texel1_color = wstate->nexttexel_color;
+                combiner_finalstage(wstate, adith, &curpixel_cvg);
 
                 wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
 
@@ -1437,7 +1443,10 @@ render_spans_2cycle_notexel1(struct rdp_state *wstate, int start, int end, int t
 
                 z_correct(wstate, offx, offy, &sz, curpixel_cvg);
 
-                combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
+                // Advance texture pipeline
+                wstate->texel0_color = wstate->texel1_color;
+                wstate->texel1_color = wstate->nexttexel_color;
+                combiner_finalstage(wstate, adith, &curpixel_cvg);
 
                 wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
 
@@ -1629,7 +1638,10 @@ render_spans_2cycle_notex(struct rdp_state *wstate, int start, int end, int tile
 
                 z_correct(wstate, offx, offy, &sz, curpixel_cvg);
 
-                combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
+                // Advance texture pipeline
+                wstate->texel0_color = wstate->texel1_color;
+                wstate->texel1_color = wstate->nexttexel_color;
+                combiner_finalstage(wstate, adith, &curpixel_cvg);
 
                 wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
 

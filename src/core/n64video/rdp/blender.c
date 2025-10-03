@@ -48,6 +48,7 @@ set_blender_input(struct rdp_state *wstate, int cycle, int which, int32_t **inpu
             *input_g = &wstate->fog_color.g;
             *input_b = &wstate->fog_color.b;
             break;
+        case_no_default;
     }
 
     // Select alpha input, different for a or b
@@ -58,6 +59,7 @@ set_blender_input(struct rdp_state *wstate, int cycle, int which, int32_t **inpu
             case BL_A_FOG:   *input_a = &wstate->fog_color.a;         break;
             case BL_A_SHADE: *input_a = &wstate->blender_shade_alpha; break;
             case BL_A_0:     *input_a = &zero_color;                  break;
+            case_no_default;
         }
         // clang-format on
     } else {
@@ -67,6 +69,7 @@ set_blender_input(struct rdp_state *wstate, int cycle, int which, int32_t **inpu
             case BL_A_MEM: *input_a = &wstate->memory_color.a;    break;
             case BL_A_1:   *input_a = &blenderone;                break;
             case BL_A_0:   *input_a = &zero_color;                break;
+            case_no_default;
         }
         // clang-format on
     }

@@ -36,5 +36,7 @@
 #define FALLTHROUGH __attribute__((fallthrough))
 #define NORETURN    __attribute__((noreturn))
 
+#define case_no_default __builtin_unreachable()
+
 // misc
 #define UNUSED(x) (void)(x)
