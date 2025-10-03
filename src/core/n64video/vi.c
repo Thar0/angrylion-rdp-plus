@@ -114,6 +114,8 @@ vi_process_full_parallel(uint32_t worker_id)
     struct n64video_pixel *divot_array = state[worker_id].divot_array;
 
     int32_t cache_marker = 0, cache_next_marker = 0, divot_cache_marker = 0, divot_cache_next_marker = 0;
+
+    // integer part of x offset from X_SCALE ?
     int32_t cache_marker_init = (x_start >> 10) - 1;
 
     struct n64video_pixel *viaa_cache = &viaa_array[0];
@@ -145,11 +147,16 @@ vi_process_full_parallel(uint32_t worker_id)
         y_inc = parallel_num_workers();
     }
 
+    // For each line ((V_END - V_START) >> 1) (full lines rather than half-lines)
     for (y = y_begin; y < y_end; y += y_inc) {
         int32_t x;
-        uint32_t x_offs = x_start;
-        uint32_t curry = y_start + y * y_add;
+
+        // y_start is y offset frm Y_SCALE register, plus the current line (y_add is Y_SCALE)
+        // current line
+        uint32_t curry = y_start + y * y_add; // 2.10 + 2.10 * (dimensionless) = 2.10
+        // next line
         uint32_t nexty = y_start + (y + 1) * y_add;
+        // integer part of current line?
         uint32_t prevy = curry >> 10;
 
         cache_marker = cache_next_marker = cache_marker_init;
@@ -159,54 +166,77 @@ vi_process_full_parallel(uint32_t worker_id)
 
         struct n64video_pixel *pixel_row = &prescale[prescale_ptr + linecount * y];
 
+        // yfrac is top 5 fraction bits
         yfrac = (curry >> 5) & 0x1f;
+
+        // vi_width_low is fb width (VI_WIDTH reg)
+        // "pixels" is the start of the current line as an index
         pixels = vi_width_low * prevy;
+        // "nextpixels" is the start of the next line as an index
         nextpixels = vi_width_low + pixels;
 
+        // check if prevy and nexty are equal (same integer coordinate)
         if (prevy == (nexty >> 10)) {
+            // fetch bug will affect the next output line
             fetchbugstate = 2;
         } else {
+            // update fetch bug state, 2 -> 1 (1 is active), then 1 -> 0 (back to inactive)
             fetchbugstate >>= 1;
         }
 
+        // x_start is x offset from X_SCALE register
+        uint32_t x_offs = x_start;
+
+        // for x in H_END - H_START
         for (x = 0; x < hres; x++, x_offs += x_add) {
+            // line_x is the integer part of the 2.10 fixed point x position
             line_x = x_offs >> 10;
+            // previous x
             prev_line_x = line_x - 1;
+            // next x
             next_line_x = line_x + 1;
+            // far x
             far_line_x = line_x + 2;
 
-            cur_x = pixels + line_x;
+            // (prev, cur, next, far) for current line
             prev_x = pixels + prev_line_x;
+            cur_x = pixels + line_x;
             next_x = pixels + next_line_x;
             far_x = pixels + far_line_x;
 
-            scan_x = nextpixels + line_x;
+            // (prev, cur, next, far) for next line
             prev_scan_x = nextpixels + prev_line_x;
+            scan_x = nextpixels + line_x;
             next_scan_x = nextpixels + next_line_x;
             far_scan_x = nextpixels + far_line_x;
 
-            line_x++;
             prev_line_x++;
+            line_x++;
             next_line_x++;
             far_line_x++;
 
+            // 5 most significant bits of fraction
             xfrac = (x_offs >> 5) & 0x1f;
 
             if (prev_line_x > cache_marker) {
+                // (Current line) Previous pos not in cache, need to fetch 3 pixels
                 vi_fetch_filter_ptr(&viaa_cache[prev_line_x], frame_buffer, prev_x, ctrl, vi_width_low, 0);
                 vi_fetch_filter_ptr(&viaa_cache[line_x], frame_buffer, cur_x, ctrl, vi_width_low, 0);
                 vi_fetch_filter_ptr(&viaa_cache[next_line_x], frame_buffer, next_x, ctrl, vi_width_low, 0);
                 cache_marker = next_line_x;
             } else if (line_x > cache_marker) {
+                // (Current line) Current pos not in cache, need to fetch 2 pixels
                 vi_fetch_filter_ptr(&viaa_cache[line_x], frame_buffer, cur_x, ctrl, vi_width_low, 0);
                 vi_fetch_filter_ptr(&viaa_cache[next_line_x], frame_buffer, next_x, ctrl, vi_width_low, 0);
                 cache_marker = next_line_x;
             } else if (next_line_x > cache_marker) {
+                // (Current line) Next pos not in cache, need to fetch 1 pixel
                 vi_fetch_filter_ptr(&viaa_cache[next_line_x], frame_buffer, next_x, ctrl, vi_width_low, 0);
                 cache_marker = next_line_x;
             }
 
             if (prev_line_x > cache_next_marker) {
+                // (Next line) Previous pos not in cache, need to fetch 3 pixels
                 vi_fetch_filter_ptr(&viaa_cache_next[prev_line_x], frame_buffer, prev_scan_x, ctrl, vi_width_low,
                                     fetchbugstate);
                 vi_fetch_filter_ptr(&viaa_cache_next[line_x], frame_buffer, scan_x, ctrl, vi_width_low, fetchbugstate);
@@ -214,17 +244,22 @@ vi_process_full_parallel(uint32_t worker_id)
                                     fetchbugstate);
                 cache_next_marker = next_line_x;
             } else if (line_x > cache_next_marker) {
+                // (Next line) Current pos not in cache, need to fetch 2 pixels
                 vi_fetch_filter_ptr(&viaa_cache_next[line_x], frame_buffer, scan_x, ctrl, vi_width_low, fetchbugstate);
                 vi_fetch_filter_ptr(&viaa_cache_next[next_line_x], frame_buffer, next_scan_x, ctrl, vi_width_low,
                                     fetchbugstate);
                 cache_next_marker = next_line_x;
             } else if (next_line_x > cache_next_marker) {
+                // (Next line) Next pos not in cache, need to fetch 1 pixel
                 vi_fetch_filter_ptr(&viaa_cache_next[next_line_x], frame_buffer, next_scan_x, ctrl, vi_width_low,
                                     fetchbugstate);
                 cache_next_marker = next_line_x;
             }
 
+            // If divot is enabled, run it now that we have pixels in the cache
+
             if (ctrl.divot_enable) {
+                // Need the far pixels for current and next lines, make sure we have them
                 if (far_line_x > cache_marker) {
                     vi_fetch_filter_ptr(&viaa_cache[far_line_x], frame_buffer, far_x, ctrl, vi_width_low, 0);
                     cache_marker = far_line_x;
@@ -237,58 +272,79 @@ vi_process_full_parallel(uint32_t worker_id)
                 }
 
                 if (line_x > divot_cache_marker) {
+                    // (Current line) Divot result not cached, run for current pixel and next pixel
                     divot_filter(&divot_cache[line_x], viaa_cache[line_x], viaa_cache[prev_line_x],
                                  viaa_cache[next_line_x]);
                     divot_filter(&divot_cache[next_line_x], viaa_cache[next_line_x], viaa_cache[line_x],
                                  viaa_cache[far_line_x]);
                     divot_cache_marker = next_line_x;
                 } else if (next_line_x > divot_cache_marker) {
+                    // (Current line) Next divot result not cached, run for next pixel
                     divot_filter(&divot_cache[next_line_x], viaa_cache[next_line_x], viaa_cache[line_x],
                                  viaa_cache[far_line_x]);
                     divot_cache_marker = next_line_x;
                 }
 
                 if (line_x > divot_cache_next_marker) {
+                    // (Next line) Divot result not cached, run for current pixel and next pixel
                     divot_filter(&divot_cache_next[line_x], viaa_cache_next[line_x], viaa_cache_next[prev_line_x],
                                  viaa_cache_next[next_line_x]);
                     divot_filter(&divot_cache_next[next_line_x], viaa_cache_next[next_line_x], viaa_cache_next[line_x],
                                  viaa_cache_next[far_line_x]);
                     divot_cache_next_marker = next_line_x;
                 } else if (next_line_x > divot_cache_next_marker) {
+                    // (Next line) Next divot result not cached, run for next pixel
                     divot_filter(&divot_cache_next[next_line_x], viaa_cache_next[next_line_x], viaa_cache_next[line_x],
                                  viaa_cache_next[far_line_x]);
                     divot_cache_next_marker = next_line_x;
                 }
 
+                // Output divot-filtered pixel
                 color = divot_cache[line_x];
             } else {
+                // Carry pixel from AA+restore
                 color = viaa_cache[line_x];
             }
 
+            // Whether the scaler is enabled
             bool lerping = ctrl.aa_mode != VI_AA_REPLICATE && (xfrac || yfrac);
 
             if (lerping) {
+                // Scaler is enabled
+
                 if (ctrl.divot_enable) {
+                    // Divot was enabled, use divot cache
                     nextcolor = divot_cache[next_line_x];
                     scancolor = divot_cache_next[line_x];
                     scannextcolor = divot_cache_next[next_line_x];
                 } else {
+                    // Divot was not enabled, don't use divot cache
                     nextcolor = viaa_cache[next_line_x];
                     scancolor = viaa_cache_next[line_x];
                     scannextcolor = viaa_cache_next[next_line_x];
                 }
 
+                // LERP colors based on x and y fractions, LERP first in y then in x as in
+                // LERP(LERP(a,c), LERP(b,d))
+                // a  b
+                // |--|
+                // c  d
                 vi_vl_lerp(&color, scancolor, yfrac);
                 vi_vl_lerp(&nextcolor, scannextcolor, yfrac);
                 vi_vl_lerp(&color, nextcolor, xfrac);
             } else if (vinnglitch) {
+                // Replicate glitch state
+
                 if (prev_line_x & vinnglitch) {
+                    // every 64 (rgba16) or 32 (rgba32) pixels, output 0?
                     color.r = color.g = color.b = 0;
                 } else {
+                    // only sample first 64/32 pixels of the framebuffer
                     cur_x = pixels + (prev_line_x & (vinnglitch - 1));
                     vi_fetch_filter_ptr(&color, frame_buffer, cur_x, ctrl, vres, 0);
 
                     if (ctrl.divot_enable) {
+                        // if enabled, do divot for this pixel
                         struct n64video_pixel prevcol, nextcol;
                         prev_x = pixels + ((prev_line_x - 1) & (vinnglitch - 1));
                         next_x = pixels + (line_x & (vinnglitch - 1));
@@ -302,13 +358,16 @@ vi_process_full_parallel(uint32_t worker_id)
             struct n64video_pixel *pixel = &pixel_row[x];
 
             if (x >= minhpass && x < maxhpass) {
+                // if x is not in the "overscan" region, apply gamma filters
                 *pixel = color;
                 gamma_filters(pixel, ctrl.gamma_enable, ctrl.gamma_dither_enable, &state[worker_id].vi_rseed);
             } else {
+                // if x is in the "overscan" region, black it out
                 pixel->r = pixel->g = pixel->b = 0;
             }
         }
 
+        // if the Y_SCALE is 1.0 carry cache results to next output line?
         if (!cache_init && y_add == 0x400) {
             cache_marker = cache_next_marker;
             cache_next_marker = cache_marker_init;
@@ -654,11 +713,11 @@ n64video_update_screen(struct n64video_frame_buffer *fb)
     hres = h_end - h_start;
     vres = (v_end - v_start) >> 1; // vertical is measured in half-lines
 
-    x_add = *vi_reg_ptr[VI_X_SCALE] & 0xfff;
-    x_start = (*vi_reg_ptr[VI_X_SCALE] >> 16) & 0xfff;
+    x_add = *vi_reg_ptr[VI_X_SCALE] & 0xfff;           // X_SCALE
+    x_start = (*vi_reg_ptr[VI_X_SCALE] >> 16) & 0xfff; // X_OFFSET
 
-    y_add = *vi_reg_ptr[VI_Y_SCALE] & 0xfff;
-    y_start = (*vi_reg_ptr[VI_Y_SCALE] >> 16) & 0xfff;
+    y_add = *vi_reg_ptr[VI_Y_SCALE] & 0xfff;           // Y_SCALE
+    y_start = (*vi_reg_ptr[VI_Y_SCALE] >> 16) & 0xfff; // Y_OFFSET
 
     v_sync = *vi_reg_ptr[VI_V_SYNC] & 0x3ff;
     v_current_line = *vi_reg_ptr[VI_V_CURRENT_LINE] & 1;
@@ -666,6 +725,8 @@ n64video_update_screen(struct n64video_frame_buffer *fb)
     vi_width_low = *vi_reg_ptr[VI_WIDTH] & 0xfff;
     frame_buffer = *vi_reg_ptr[VI_ORIGIN] & 0xffffff;
 
+    // If the AA mode is replicate, the VI is enabled, h_start is sufficiently small, and the x scale is sufficiently
+    // small, the VI generates corrupted output
     if (ctrl.aa_mode == VI_AA_REPLICATE && (ctrl.type & 2) && h_start < (ctrl.type == VI_TYPE_RGBA5551 ? 0x80 : 0x40) &&
         x_add <= 0x200) {
         vinnglitch = ctrl.type == VI_TYPE_RGBA5551 ? 0x40 : 0x20;
@@ -710,15 +771,18 @@ n64video_update_screen(struct n64video_frame_buffer *fb)
     }
 
     // adjust sizes and offsets
+    // this code is surely not accurate to hardware and is based on an incomplete understanding of the VI
     ispal = v_sync > (V_SYNC_NTSC + 25);
     h_start -= (ispal ? 128 : 108);
 
     bool h_start_clamped = false;
 
     if (h_start < 0) {
+        // H_START is negative, adjust X_OFFSET by X_SCALE * -H_START
         x_start += (x_add * (-h_start));
+        // hres = H_END
         hres += h_start;
-
+        // clamp to 0
         h_start = 0;
         h_start_clamped = true;
     }
@@ -734,6 +798,7 @@ n64video_update_screen(struct n64video_frame_buffer *fb)
     bool hres_clamped = false;
 
     if ((hres + h_start) > PRESCALE_WIDTH) {
+        // if H_END > 640, clamp to 640
         hres = PRESCALE_WIDTH - h_start;
         hres_clamped = true;
     }
@@ -756,7 +821,10 @@ n64video_update_screen(struct n64video_frame_buffer *fb)
         uint32_t lineshifter = !ctrl.serrate;
         vactivelines >>= lineshifter;
 
+        // if H_START was clamped, the first 8 pixels are sampled properly otherwise they aren't sampled in time to be
+        // displayed?
         minhpass = h_start_clamped ? 0 : 8;
+        // if H_END was clamped, the last 7 pixels are sampled properly otherwise they're cut off?
         maxhpass = hres_clamped ? hres : (hres - 7);
 
         // run filter update in parallel if enabled

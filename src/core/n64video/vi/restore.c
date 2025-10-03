@@ -1,27 +1,53 @@
 #ifdef N64VIDEO_C
 
-static int vi_restore_table[0x400];
+// https://patents.google.com/patent/US5699079A/en
+
+static int vi_restore_table[(1 << 5) * (1 << 5)];
 
 static STRICTINLINE void
 restore_filter16(int *r, int *g, int *b, uint32_t fboffset, uint32_t num, uint32_t hres, uint32_t fetchbugstate)
 {
-    int i;
+    // position of center pixel
     uint32_t idx = (fboffset >> 1) + num;
 
+    // pixel immediately left
+    // . . .
+    // @ x .
+    // . . .
     uint32_t toleftpix = idx - 1;
 
-    uint32_t leftuppix, leftdownpix, maxpix;
+    // upper-left neighbor
+    // @ . .
+    // . x .
+    // . . .
+    uint32_t leftuppix = idx - hres - 1;
 
-    leftuppix = idx - hres - 1;
-
+    uint32_t leftdownpix;
     if (fetchbugstate != 1) {
+        // not fetch bug: sample next line
+        // lower-left neighbor
+        // . . .
+        // . x .
+        // @ . .
         leftdownpix = idx + hres - 1;
-        maxpix = idx + hres + 1;
     } else {
-        leftdownpix = toleftpix;
-        maxpix = toleftpix + 2;
+        // fetch bug: sample current line again
+        // . . .
+        // @ x .
+        // . . .
+        leftdownpix = idx - 1;
     }
 
+    // 8 pixels surrounding this pixel
+    const uint32_t dirs[] = {
+        // clang-format off
+        leftuppix,   leftuppix   + 1, leftuppix   + 2,
+        toleftpix,                    toleftpix   + 2,
+        leftdownpix, leftdownpix + 1, leftdownpix + 2,
+        // clang-format on
+    };
+
+    // Read value for the center pixel
     int rend = *r;
     int gend = *g;
     int bend = *b;
@@ -29,28 +55,27 @@ restore_filter16(int *r, int *g, int *b, uint32_t fboffset, uint32_t num, uint32
     const int *greenptr = &vi_restore_table[(gend << 2) & 0x3e0];
     const int *blueptr = &vi_restore_table[(bend << 2) & 0x3e0];
 
-    uint32_t tempr, tempg, tempb;
-    uint16_t pix;
+    // Correct it according to whether the surrounding pixels are greater, smaller or equal in each channel
 
-    const uint32_t dirs[] = { leftuppix,       leftuppix + 1, leftuppix + 2, leftdownpix,
-                              leftdownpix + 1, maxpix,        toleftpix,     toleftpix + 2 };
-
-    if (rdram_valid_idx16(maxpix) && rdram_valid_idx16(leftuppix)) {
-        for (i = 0; i < 8; i++) {
-            pix = rdram_read_idx16_fast(dirs[i]);
-            tempr = (pix >> 11) & 0x1f;
-            tempg = (pix >> 6) & 0x1f;
-            tempb = (pix >> 1) & 0x1f;
+    // Note there was a renderer optimization here, if all the pixels are in bounds of RDRAM use
+    // the "fast" rdram read function that doesn't do the range check for all pixels. On hardware
+    // it should request the RDRAM read anyway and the RDRAM will return 0 if out of range.
+    if (rdram_valid_idx16(leftdownpix + 2) && rdram_valid_idx16(leftuppix)) {
+        for (int i = 0; i < 8; i++) {
+            uint16_t pix = rdram_read_idx16_fast(dirs[i]);
+            uint32_t tempr = (pix >> 11) & 0x1f;
+            uint32_t tempg = (pix >> 6) & 0x1f;
+            uint32_t tempb = (pix >> 1) & 0x1f;
             rend += redptr[tempr];
             gend += greenptr[tempg];
             bend += blueptr[tempb];
         }
     } else {
-        for (i = 0; i < 8; i++) {
-            pix = rdram_read_idx16(dirs[i]);
-            tempr = (pix >> 11) & 0x1f;
-            tempg = (pix >> 6) & 0x1f;
-            tempb = (pix >> 1) & 0x1f;
+        for (int i = 0; i < 8; i++) {
+            uint16_t pix = rdram_read_idx16(dirs[i]);
+            uint32_t tempr = (pix >> 11) & 0x1f;
+            uint32_t tempg = (pix >> 6) & 0x1f;
+            uint32_t tempb = (pix >> 1) & 0x1f;
             rend += redptr[tempr];
             gend += greenptr[tempg];
             bend += blueptr[tempb];
@@ -65,23 +90,47 @@ restore_filter16(int *r, int *g, int *b, uint32_t fboffset, uint32_t num, uint32
 static STRICTINLINE void
 restore_filter32(int *r, int *g, int *b, uint32_t fboffset, uint32_t num, uint32_t hres, uint32_t fetchbugstate)
 {
-    int i;
+    // position of center pixel
     uint32_t idx = (fboffset >> 2) + num;
 
+    // pixel immediately left
+    // . . .
+    // @ x .
+    // . . .
     uint32_t toleftpix = idx - 1;
 
-    uint32_t leftuppix, leftdownpix, maxpix;
+    // upper-left neighbor
+    // @ . .
+    // . x .
+    // . . .
+    uint32_t leftuppix = idx - hres - 1;
 
-    leftuppix = idx - hres - 1;
-
+    uint32_t leftdownpix;
     if (fetchbugstate != 1) {
+        // not fetch bug: sample next line
+        // lower-left neighbor
+        // . . .
+        // . x .
+        // @ . .
         leftdownpix = idx + hres - 1;
-        maxpix = idx + hres + 1;
     } else {
-        leftdownpix = toleftpix;
-        maxpix = toleftpix + 2;
+        // fetch bug: sample current line again
+        // . . .
+        // @ x .
+        // . . .
+        leftdownpix = idx - 1;
     }
 
+    // 8 pixels surrounding this pixel
+    const uint32_t dirs[] = {
+        // clang-format off
+        leftuppix,   leftuppix   + 1, leftuppix   + 2,
+        toleftpix,                    toleftpix   + 2,
+        leftdownpix, leftdownpix + 1, leftdownpix + 2,
+        // clang-format on
+    };
+
+    // Read value for the center pixel
     int rend = *r;
     int gend = *g;
     int bend = *b;
@@ -89,28 +138,23 @@ restore_filter32(int *r, int *g, int *b, uint32_t fboffset, uint32_t num, uint32
     const int *greenptr = &vi_restore_table[(gend << 2) & 0x3e0];
     const int *blueptr = &vi_restore_table[(bend << 2) & 0x3e0];
 
-    uint32_t tempr, tempg, tempb;
-    uint32_t pix;
-
-    const uint32_t dirs[] = { leftuppix,       leftuppix + 1, leftuppix + 2, leftdownpix,
-                              leftdownpix + 1, maxpix,        toleftpix,     toleftpix + 2 };
-
-    if (rdram_valid_idx32(maxpix) && rdram_valid_idx32(leftuppix)) {
-        for (i = 0; i < 8; i++) {
-            pix = rdram_read_idx32_fast(dirs[i]);
-            tempr = (pix >> 27) & 0x1f;
-            tempg = (pix >> 19) & 0x1f;
-            tempb = (pix >> 11) & 0x1f;
+    // Correct it according to whether the surrounding pixels are greater, smaller or equal in each channel
+    if (rdram_valid_idx32(leftdownpix + 2) && rdram_valid_idx32(leftuppix)) {
+        for (int i = 0; i < 8; i++) {
+            uint32_t pix = rdram_read_idx32_fast(dirs[i]);
+            uint32_t tempr = (pix >> 27) & 0x1f;
+            uint32_t tempg = (pix >> 19) & 0x1f;
+            uint32_t tempb = (pix >> 11) & 0x1f;
             rend += redptr[tempr];
             gend += greenptr[tempg];
             bend += blueptr[tempb];
         }
     } else {
-        for (i = 0; i < 8; i++) {
-            pix = rdram_read_idx32(dirs[i]);
-            tempr = (pix >> 27) & 0x1f;
-            tempg = (pix >> 19) & 0x1f;
-            tempb = (pix >> 11) & 0x1f;
+        for (int i = 0; i < 8; i++) {
+            uint32_t pix = rdram_read_idx32(dirs[i]);
+            uint32_t tempr = (pix >> 27) & 0x1f;
+            uint32_t tempg = (pix >> 19) & 0x1f;
+            uint32_t tempb = (pix >> 11) & 0x1f;
             rend += redptr[tempr];
             gend += greenptr[tempg];
             bend += blueptr[tempb];
@@ -125,8 +169,8 @@ restore_filter32(int *r, int *g, int *b, uint32_t fboffset, uint32_t num, uint32
 static void
 vi_restore_init(void)
 {
-    int i;
-    for (i = 0; i < 0x400; i++) {
+    // Lookup table that encodes the results of comparing two 5-bit numbers
+    for (int i = 0; i < (1 << 5) * (1 << 5); i++) {
         if (((i >> 5) & 0x1f) < (i & 0x1f))
             vi_restore_table[i] = 1;
         else if (((i >> 5) & 0x1f) > (i & 0x1f))

@@ -505,7 +505,7 @@ render_spans_1cycle_complete(struct rdp_state *wstate, int start, int end, int t
             // sz is now u15.3
 
             // dither noise
-            if (wstate->other_modes.f.getditherlevel < 2)
+            if (wstate->other_modes.f.getditherlevel != DITHER_LEVEL_UNUSED)
                 get_dither_noise(wstate, x, ycur, &cdith, &adith);
 
             // combiner
@@ -696,7 +696,7 @@ render_spans_1cycle_notexel1(struct rdp_state *wstate, int start, int end, int t
                 rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
                 z_correct(wstate, offx, offy, &sz, curpixel_cvg);
 
-                if (wstate->other_modes.f.getditherlevel < 2)
+                if (wstate->other_modes.f.getditherlevel != DITHER_LEVEL_UNUSED)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
                 combiner_finalstage(wstate, adith, &curpixel_cvg);
@@ -845,7 +845,7 @@ render_spans_1cycle_notex(struct rdp_state *wstate, int start, int end, int tile
                 rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
                 z_correct(wstate, offx, offy, &sz, curpixel_cvg);
 
-                if (wstate->other_modes.f.getditherlevel < 2)
+                if (wstate->other_modes.f.getditherlevel != DITHER_LEVEL_UNUSED)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
                 combiner_finalstage(wstate, adith, &curpixel_cvg);
@@ -1011,7 +1011,7 @@ render_spans_2cycle_complete(struct rdp_state *wstate, int start, int end, int t
         rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
 
         // Dither noise
-        if (wstate->other_modes.f.getditherlevel < 2)
+        if (wstate->other_modes.f.getditherlevel != DITHER_LEVEL_UNUSED)
             get_dither_noise(wstate, x, ycur, &cdith, &adith);
 
         // First CC cycle
@@ -1153,7 +1153,7 @@ render_spans_2cycle_complete(struct rdp_state *wstate, int start, int end, int t
             }
 
             // Cycle dither noise
-            if (wstate->other_modes.f.getditherlevel < 2)
+            if (wstate->other_modes.f.getditherlevel != DITHER_LEVEL_UNUSED)
                 get_dither_noise(wstate, x, ycur, &cdith, &adith);
 
             // Next pixel becomes current pixel
@@ -1301,7 +1301,7 @@ render_spans_2cycle_notexelnext(struct rdp_state *wstate, int start, int end, in
 
                     rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
 
-                    if (wstate->other_modes.f.getditherlevel < 2)
+                    if (wstate->other_modes.f.getditherlevel != DITHER_LEVEL_UNUSED)
                         get_dither_noise(wstate, x, i, &cdith, &adith);
 
                     combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
@@ -1377,7 +1377,7 @@ render_spans_2cycle_notexelnext(struct rdp_state *wstate, int start, int end, in
                     rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
                                             flip, &delayedhbwidx);
 
-                if (wstate->other_modes.f.getditherlevel < 2)
+                if (wstate->other_modes.f.getditherlevel != DITHER_LEVEL_UNUSED)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
                 curpixel_cvg = nextpixel_cvg;
@@ -1523,7 +1523,7 @@ render_spans_2cycle_notexel1(struct rdp_state *wstate, int start, int end, int t
 
                     rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
 
-                    if (wstate->other_modes.f.getditherlevel < 2)
+                    if (wstate->other_modes.f.getditherlevel != DITHER_LEVEL_UNUSED)
                         get_dither_noise(wstate, x, i, &cdith, &adith);
 
                     combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
@@ -1597,7 +1597,7 @@ render_spans_2cycle_notexel1(struct rdp_state *wstate, int start, int end, int t
                     rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
                                             flip, &delayedhbwidx);
 
-                if (wstate->other_modes.f.getditherlevel < 2)
+                if (wstate->other_modes.f.getditherlevel != DITHER_LEVEL_UNUSED)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
                 curpixel_cvg = nextpixel_cvg;
@@ -1720,7 +1720,7 @@ render_spans_2cycle_notex(struct rdp_state *wstate, int start, int end, int tile
 
                     rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
 
-                    if (wstate->other_modes.f.getditherlevel < 2)
+                    if (wstate->other_modes.f.getditherlevel != DITHER_LEVEL_UNUSED)
                         get_dither_noise(wstate, x, i, &cdith, &adith);
 
                     combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
@@ -1782,7 +1782,7 @@ render_spans_2cycle_notex(struct rdp_state *wstate, int start, int end, int tile
                     rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
                                             flip, &delayedhbwidx);
 
-                if (wstate->other_modes.f.getditherlevel < 2)
+                if (wstate->other_modes.f.getditherlevel != DITHER_LEVEL_UNUSED)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
                 curpixel_cvg = nextpixel_cvg;

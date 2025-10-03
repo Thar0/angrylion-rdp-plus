@@ -6,9 +6,12 @@ divot_filter(struct n64video_pixel *final, struct n64video_pixel center, struct 
 {
     *final = center;
 
+    // if all pixels are fully covered, skip
     if ((center.a & left.a & right.a) == 7) {
         return;
     }
+
+    // collect median for each channel
 
     if ((left.r >= center.r && right.r >= left.r) || (left.r >= right.r && center.r >= left.r))
         final->r = left.r;

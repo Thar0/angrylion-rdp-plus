@@ -9,24 +9,33 @@ vi_fetch_filter16(struct n64video_pixel *res, uint32_t fboffset, uint32_t cur_x,
     uint8_t hval;
     uint16_t pix;
     uint32_t cur_cvg;
+
+    // Read the pixel we're about to process
     if (ctrl.aa_mode <= VI_AA_RESAMP_EXTRA) {
+        // EXTRA or EXTRA_ALWAYS
         PAIRREAD16(pix, hval, idx);
         cur_cvg = ((pix & 1) << 2) | hval;
     } else {
+        // Fully covered
         RREADIDX16(pix, idx);
         cur_cvg = 7;
     }
+
+    // Decompose into color channels
     r = RGBA16_R(pix);
     g = RGBA16_G(pix);
     b = RGBA16_B(pix);
 
     if (cur_cvg == 7) {
+        // Fully covered, only run the restore filter if it's enabled
         if (ctrl.dither_filter_enable)
             restore_filter16(&r, &g, &b, fboffset, cur_x, hres, fetchstate);
     } else {
+        // Partially covered, AA filter
         video_filter16(&r, &g, &b, fboffset, cur_x, hres, cur_cvg, fetchstate);
     }
 
+    // Output AA'd + Restored pixel
     res->r = (uint8_t)r;
     res->g = (uint8_t)g;
     res->b = (uint8_t)b;
@@ -39,23 +48,30 @@ vi_fetch_filter32(struct n64video_pixel *res, uint32_t fboffset, uint32_t cur_x,
 {
     int r, g, b;
     uint32_t pix, addr = (fboffset >> 2) + cur_x;
-    RREADIDX32(pix, addr);
     uint32_t cur_cvg;
+
+    // Read the pixel we're about to process
+    RREADIDX32(pix, addr);
     if (ctrl.aa_mode <= VI_AA_RESAMP_EXTRA)
         cur_cvg = (pix >> 5) & 7;
     else
         cur_cvg = 7;
-    r = RGBA32_R(pix) & 0xff;
-    g = RGBA32_G(pix) & 0xff;
-    b = RGBA32_B(pix) & 0xff;
+
+    // Decompose into color channels
+    r = RGBA32_R(pix);
+    g = RGBA32_G(pix);
+    b = RGBA32_B(pix);
 
     if (cur_cvg == 7) {
+        // Fully covered, only run the restore filter if it's enabled
         if (ctrl.dither_filter_enable)
             restore_filter32(&r, &g, &b, fboffset, cur_x, hres, fetchstate);
     } else {
+        // Partially covered, AA filter
         video_filter32(&r, &g, &b, fboffset, cur_x, hres, cur_cvg, fetchstate);
     }
 
+    // Output AA'd + Restored pixel
     res->r = (uint8_t)r;
     res->g = (uint8_t)g;
     res->b = (uint8_t)b;

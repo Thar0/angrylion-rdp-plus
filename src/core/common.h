@@ -40,5 +40,9 @@
     default:            \
         __builtin_unreachable()
 
+// branch prediction hints
+#define LIKELY(cond)   __builtin_expect(!!(cond), true)
+#define UNLIKELY(cond) __builtin_expect(!!(cond), false)
+
 // misc
 #define UNUSED(x) (void)(x)

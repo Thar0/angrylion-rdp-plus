@@ -118,6 +118,9 @@ struct other_modes {
         int realblendershiftersneeded;
         int interpixelblendershiftersneeded;
         int getditherlevel;
+#define DITHER_LEVEL_NOISE  0
+#define DITHER_LEVEL_USED   1
+#define DITHER_LEVEL_UNUSED 2
         int textureuselevel0;
         int textureuselevel1;
     } f;
@@ -619,11 +622,11 @@ deduce_derivatives(struct rdp_state *wstate)
         (wstate->other_modes.cycle_type == CYCLE_TYPE_2 &&
          (wstate->combiner_rgbsub_a_r[0] == &wstate->noise || wstate->combiner_rgbsub_a_r[1] == &wstate->noise)) ||
         wstate->other_modes.alpha_dither_sel == 2)
-        wstate->other_modes.f.getditherlevel = 0;
+        wstate->other_modes.f.getditherlevel = DITHER_LEVEL_NOISE;
     else if (wstate->other_modes.f.rgb_alpha_dither != 0xf)
-        wstate->other_modes.f.getditherlevel = 1;
+        wstate->other_modes.f.getditherlevel = DITHER_LEVEL_USED;
     else
-        wstate->other_modes.f.getditherlevel = 2;
+        wstate->other_modes.f.getditherlevel = DITHER_LEVEL_UNUSED;
 
     wstate->other_modes.f.dolod = wstate->other_modes.tex_lod_en || lodfracused;
 }

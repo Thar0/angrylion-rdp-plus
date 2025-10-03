@@ -79,7 +79,7 @@ static STRICTINLINE void
 get_dither_noise(struct rdp_state *wstate, int x, int y, int *cdith, int *adith)
 {
     // Cycle noise if it's used (renderer optimization, hw always cycles noise even when it isn't used)
-    if (!wstate->other_modes.f.getditherlevel)
+    if (wstate->other_modes.f.getditherlevel == DITHER_LEVEL_NOISE)
         wstate->noise = ((irand(&wstate->rseed) & 7) << 6) | 0x20;
 
     // Adjustment for when scissor interlacing is enabled
