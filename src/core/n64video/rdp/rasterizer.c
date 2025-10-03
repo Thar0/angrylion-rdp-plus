@@ -1,6 +1,7 @@
 #ifdef N64VIDEO_C
 
-static STRICTINLINE int32_t normalize_dzpix(int32_t sum)
+static STRICTINLINE int32_t
+normalize_dzpix(int32_t sum)
 {
     int count;
     if (sum & 0xc000)
@@ -11,8 +12,7 @@ static STRICTINLINE int32_t normalize_dzpix(int32_t sum)
     if (sum == 1)
         return 3;
 
-    for(count = 0x2000; count > 0; count >>= 1)
-    {
+    for (count = 0x2000; count > 0; count >>= 1) {
         if (sum & count)
             return (count << 1);
     }
@@ -20,47 +20,43 @@ static STRICTINLINE int32_t normalize_dzpix(int32_t sum)
     return 0;
 }
 
-static void replicate_for_copy(struct rdp_state* wstate, uint32_t* outbyte, uint32_t inshort, uint32_t nybbleoffset, uint32_t tilenum, uint32_t tformat, uint32_t tsize)
+static void
+replicate_for_copy(struct rdp_state *wstate, uint32_t *outbyte, uint32_t inshort, uint32_t nybbleoffset,
+                   uint32_t tilenum, uint32_t tformat, uint32_t tsize)
 {
     uint32_t lownib, hinib;
-    switch(tsize)
-    {
-    case PIXEL_SIZE_4BIT:
-        lownib = (nybbleoffset ^ 3) << 2;
-        lownib = hinib = (inshort >> lownib) & 0xf;
-        if (tformat == FORMAT_CI)
-        {
-            *outbyte = (wstate->tile[tilenum].palette << 4) | lownib;
-        }
-        else if (tformat == FORMAT_IA)
-        {
-            lownib = (lownib << 4) | lownib;
-            *outbyte = (lownib & 0xe0) | ((lownib & 0xe0) >> 3) | ((lownib & 0xc0) >> 6);
-        }
-        else
-            *outbyte = (lownib << 4) | lownib;
-        break;
-    case PIXEL_SIZE_8BIT:
-        hinib = ((nybbleoffset ^ 3) | 1) << 2;
-        if (tformat == FORMAT_IA)
-        {
-            lownib = (inshort >> hinib) & 0xf;
-            *outbyte = (lownib << 4) | lownib;
-        }
-        else
-        {
-            lownib = (inshort >> (hinib & ~4)) & 0xf;
-            hinib = (inshort >> hinib) & 0xf;
-            *outbyte = (hinib << 4) | lownib;
-        }
-        break;
-    default:
-        *outbyte = (inshort >> 8) & 0xff;
-        break;
+    switch (tsize) {
+        case PIXEL_SIZE_4BIT:
+            lownib = (nybbleoffset ^ 3) << 2;
+            lownib = hinib = (inshort >> lownib) & 0xf;
+            if (tformat == FORMAT_CI) {
+                *outbyte = (wstate->tile[tilenum].palette << 4) | lownib;
+            } else if (tformat == FORMAT_IA) {
+                lownib = (lownib << 4) | lownib;
+                *outbyte = (lownib & 0xe0) | ((lownib & 0xe0) >> 3) | ((lownib & 0xc0) >> 6);
+            } else
+                *outbyte = (lownib << 4) | lownib;
+            break;
+        case PIXEL_SIZE_8BIT:
+            hinib = ((nybbleoffset ^ 3) | 1) << 2;
+            if (tformat == FORMAT_IA) {
+                lownib = (inshort >> hinib) & 0xf;
+                *outbyte = (lownib << 4) | lownib;
+            } else {
+                lownib = (inshort >> (hinib & ~4)) & 0xf;
+                hinib = (inshort >> hinib) & 0xf;
+                *outbyte = (hinib << 4) | lownib;
+            }
+            break;
+        default:
+            *outbyte = (inshort >> 8) & 0xff;
+            break;
     }
 }
 
-static void fetch_qword_copy(struct rdp_state* wstate, uint32_t* hidword, uint32_t* lowdword, int32_t ssss, int32_t ssst, uint32_t tilenum)
+static void
+fetch_qword_copy(struct rdp_state *wstate, uint32_t *hidword, uint32_t *lowdword, int32_t ssss, int32_t ssst,
+                 uint32_t tilenum)
 {
     uint32_t shorta, shortb, shortc, shortd;
     uint32_t sortshort[8];
@@ -70,13 +66,10 @@ static void fetch_qword_copy(struct rdp_state* wstate, uint32_t* hidword, uint32
     int largetex = 0;
 
     uint32_t tformat, tsize;
-    if (wstate->other_modes.en_tlut)
-    {
+    if (wstate->other_modes.en_tlut) {
         tsize = PIXEL_SIZE_16BIT;
         tformat = wstate->other_modes.tlut_type ? FORMAT_IA : FORMAT_RGBA;
-    }
-    else
-    {
+    } else {
         tsize = wstate->tile[tilenum].size;
         tformat = wstate->tile[tilenum].format;
     }
@@ -85,23 +78,17 @@ static void fetch_qword_copy(struct rdp_state* wstate, uint32_t* hidword, uint32
     read_tmem_copy(wstate, sss, sss1, sss2, sss3, sst, tilenum, sortshort, hibits, lowbits);
     largetex = (tformat == FORMAT_YUV || (tformat == FORMAT_RGBA && tsize == PIXEL_SIZE_32BIT));
 
-
-    if (wstate->other_modes.en_tlut)
-    {
+    if (wstate->other_modes.en_tlut) {
         shorta = sortshort[4];
         shortb = sortshort[5];
         shortc = sortshort[6];
         shortd = sortshort[7];
-    }
-    else if (largetex)
-    {
+    } else if (largetex) {
         shorta = sortshort[0];
         shortb = sortshort[1];
         shortc = sortshort[2];
         shortd = sortshort[3];
-    }
-    else
-    {
+    } else {
         shorta = hibits[0] ? sortshort[4] : sortshort[0];
         shortb = hibits[1] ? sortshort[5] : sortshort[1];
         shortc = hibits[3] ? sortshort[6] : sortshort[2];
@@ -112,8 +99,7 @@ static void fetch_qword_copy(struct rdp_state* wstate, uint32_t* hidword, uint32
 
     if (tsize == PIXEL_SIZE_16BIT)
         *hidword = (shorta << 16) | shortb;
-    else
-    {
+    else {
         replicate_for_copy(wstate, &shorta, shorta, lowbits[0] & 3, tilenum, tformat, tsize);
         replicate_for_copy(wstate, &shortb, shortb, lowbits[1] & 3, tilenum, tformat, tsize);
         replicate_for_copy(wstate, &shortc, shortc, lowbits[3] & 3, tilenum, tformat, tsize);
@@ -122,21 +108,17 @@ static void fetch_qword_copy(struct rdp_state* wstate, uint32_t* hidword, uint32
     }
 }
 
-static STRICTINLINE void rgba_correct(struct rdp_state* wstate, int offx, int offy, int r, int g, int b, int a, uint32_t cvg)
+static STRICTINLINE void
+rgba_correct(struct rdp_state *wstate, int offx, int offy, int r, int g, int b, int a, uint32_t cvg)
 {
     int summand_r, summand_b, summand_g, summand_a;
 
-
-
-    if (cvg == 8)
-    {
+    if (cvg == 8) {
         r >>= 2;
         g >>= 2;
         b >>= 2;
         a >>= 2;
-    }
-    else
-    {
+    } else {
         summand_r = offx * wstate->spans_cdr + offy * wstate->spans_drdy;
         summand_g = offx * wstate->spans_cdg + offy * wstate->spans_dgdy;
         summand_b = offx * wstate->spans_cdb + offy * wstate->spans_dbdy;
@@ -148,46 +130,48 @@ static STRICTINLINE void rgba_correct(struct rdp_state* wstate, int offx, int of
         a = ((a << 2) + summand_a) >> 4;
     }
 
-
     wstate->shade_color.r = special_9bit_clamptable[r & 0x1ff];
     wstate->shade_color.g = special_9bit_clamptable[g & 0x1ff];
     wstate->shade_color.b = special_9bit_clamptable[b & 0x1ff];
     wstate->shade_color.a = special_9bit_clamptable[a & 0x1ff];
 }
 
-static STRICTINLINE void z_correct(struct rdp_state* wstate, int offx, int offy, int* z, uint32_t cvg)
+static STRICTINLINE void
+z_correct(struct rdp_state *wstate, int offx, int offy, int *z, uint32_t cvg)
 {
     int summand_z;
     int sz = *z;
     int zanded;
 
-
-
     if (cvg == 8)
         sz = sz >> 3;
-    else
-    {
+    else {
         summand_z = offx * wstate->spans_cdz + offy * wstate->spans_dzdy;
 
         sz = ((sz << 2) + summand_z) >> 5;
     }
 
-
-
     zanded = (sz & 0x60000) >> 17;
 
-
-    switch (zanded)
-    {
-        case 0: *z = sz & 0x3ffff;                      break;
-        case 1: *z = sz & 0x3ffff;                      break;
-        case 2: *z = 0x3ffff;                           break;
-        case 3: *z = 0;                                 break;
+    switch (zanded) {
+        case 0:
+            *z = sz & 0x3ffff;
+            break;
+        case 1:
+            *z = sz & 0x3ffff;
+            break;
+        case 2:
+            *z = 0x3ffff;
+            break;
+        case 3:
+            *z = 0;
+            break;
     }
 }
 
-
-void rejected_hbwrite_1cycle(struct rdp_state* wstate, int cdith, uint32_t blend_en, uint32_t prewrap, uint32_t curpixel, uint32_t curpixel_cvg, uint32_t curpixel_memcvg, int flip, int* delayedhbwidx)
+void
+rejected_hbwrite_1cycle(struct rdp_state *wstate, int cdith, uint32_t blend_en, uint32_t prewrap, uint32_t curpixel,
+                        uint32_t curpixel_cvg, uint32_t curpixel_memcvg, int flip, int *delayedhbwidx)
 {
     int g, dontblend;
     int gval = 0;
@@ -195,28 +179,23 @@ void rejected_hbwrite_1cycle(struct rdp_state* wstate, int cdith, uint32_t blend
     int32_t hval = 0;
     int fbsel = wstate->fb_size;
 
-    if (wstate->fb_size == PIXEL_SIZE_8BIT)
-    {
+    if (wstate->fb_size == PIXEL_SIZE_8BIT) {
         fb = wstate->fb_address + curpixel;
         if (!(fb & 1))
             fbsel--;
     }
 
-    if (fbsel & 1)
-    {
-        if (!wstate->other_modes.color_on_cvg || prewrap)
-        {
+    if (fbsel & 1) {
+        if (!wstate->other_modes.color_on_cvg || prewrap) {
             dontblend = (wstate->other_modes.f.partialreject_1cycle && wstate->pixel_color.a >= 0xff);
             if (!blend_en || dontblend)
                 g = *wstate->blender1a_g[0];
-            else
-            {
-                wstate->inv_pixel_color.a =  (~(*wstate->blender1b_a[0])) & 0xff;
+            else {
+                wstate->inv_pixel_color.a = (~(*wstate->blender1b_a[0])) & 0xff;
 
                 blender_equation_cycle0_gval(wstate, &g);
             }
-        }
-        else
+        } else
             g = *wstate->blender2a_g[0];
 
         if (wstate->other_modes.rgb_dither_sel != 3)
@@ -225,48 +204,44 @@ void rejected_hbwrite_1cycle(struct rdp_state* wstate, int cdith, uint32_t blend
         gval = (g & 1) ? 3 : 0;
     }
 
-    switch (fbsel)
-    {
-    case PIXEL_SIZE_4BIT:
-        break;
-    case PIXEL_SIZE_8BIT:
-        if (flip && *delayedhbwidx >= 0)
-        {
-            if ((uint32_t)*delayedhbwidx < fb)
-            {
-                if (rdram_valid_idx8((uint32_t)*delayedhbwidx))
-                {
-                    int oldhbidx = *delayedhbwidx >> 1;
-                    rdram_hidden[oldhbidx] &= ~2;
-                    rdram_hidden[oldhbidx] |= rdram_hidden_old[oldhbidx & 7] & 2;
+    switch (fbsel) {
+        case PIXEL_SIZE_4BIT:
+            break;
+        case PIXEL_SIZE_8BIT:
+            if (flip && *delayedhbwidx >= 0) {
+                if ((uint32_t)*delayedhbwidx < fb) {
+                    if (rdram_valid_idx8((uint32_t)*delayedhbwidx)) {
+                        int oldhbidx = *delayedhbwidx >> 1;
+                        rdram_hidden[oldhbidx] &= ~2;
+                        rdram_hidden[oldhbidx] |= rdram_hidden_old[oldhbidx & 7] & 2;
+                    }
+                } else if (rdram_valid_idx8(fb)) {
+                    rdram_hidden[fb >> 1] &= ~2;
+                    rdram_hidden[fb >> 1] |= gval & 2;
                 }
-            }
-            else if (rdram_valid_idx8(fb))
-            {
-                rdram_hidden[fb >> 1] &= ~2;
-                rdram_hidden[fb >> 1] |= gval & 2;
+
+                *delayedhbwidx = -1;
             }
 
-            *delayedhbwidx = -1;
-        }
-
-        rdram_hidden_old[(fb >> 1) & 7] = gval & 0xff;
-        break;
-    case PIXEL_SIZE_16BIT:
-        fb = (wstate->fb_address >> 1) + curpixel;
-        if (wstate->fb_format == FORMAT_RGBA)
-            hval = finalize_spanalpha(wstate->other_modes.cvg_dest, blend_en, curpixel_cvg, curpixel_memcvg) & 3;
-        rdram_hidden_old[fb & 7] = hval & 0xff;
-        break;
-    case PIXEL_SIZE_32BIT:
-        fb = (wstate->fb_address >> 2) + curpixel;
-        rdram_hidden_old[(fb << 1) & 7] = gval & 0xff;
-        rdram_hidden_old[((fb << 1) + 1) & 7] = 0;
-        break;
+            rdram_hidden_old[(fb >> 1) & 7] = gval & 0xff;
+            break;
+        case PIXEL_SIZE_16BIT:
+            fb = (wstate->fb_address >> 1) + curpixel;
+            if (wstate->fb_format == FORMAT_RGBA)
+                hval = finalize_spanalpha(wstate->other_modes.cvg_dest, blend_en, curpixel_cvg, curpixel_memcvg) & 3;
+            rdram_hidden_old[fb & 7] = hval & 0xff;
+            break;
+        case PIXEL_SIZE_32BIT:
+            fb = (wstate->fb_address >> 2) + curpixel;
+            rdram_hidden_old[(fb << 1) & 7] = gval & 0xff;
+            rdram_hidden_old[((fb << 1) + 1) & 7] = 0;
+            break;
     }
 }
 
-void rejected_hbwrite_2cycle(struct rdp_state* wstate, int cdith, uint32_t blend_en, uint32_t prewrap, uint32_t curpixel, uint32_t curpixel_cvg, uint32_t curpixel_memcvg, int flip, int* delayedhbwidx)
+void
+rejected_hbwrite_2cycle(struct rdp_state *wstate, int cdith, uint32_t blend_en, uint32_t prewrap, uint32_t curpixel,
+                        uint32_t curpixel_cvg, uint32_t curpixel_memcvg, int flip, int *delayedhbwidx)
 {
     int g, dontblend;
     int gval = 0;
@@ -274,28 +249,23 @@ void rejected_hbwrite_2cycle(struct rdp_state* wstate, int cdith, uint32_t blend
     int32_t hval = 0;
     int fbsel = wstate->fb_size;
 
-    if (wstate->fb_size == PIXEL_SIZE_8BIT)
-    {
+    if (wstate->fb_size == PIXEL_SIZE_8BIT) {
         fb = wstate->fb_address + curpixel;
         if (!(fb & 1))
             fbsel--;
     }
 
-    if (fbsel & 1)
-    {
-        if (!wstate->other_modes.color_on_cvg || prewrap)
-        {
+    if (fbsel & 1) {
+        if (!wstate->other_modes.color_on_cvg || prewrap) {
             dontblend = (wstate->other_modes.f.partialreject_2cycle && wstate->pixel_color.a >= 0xff);
             if (!blend_en || dontblend)
                 g = *wstate->blender1a_g[1];
-            else
-            {
-                wstate->inv_pixel_color.a =  (~(*wstate->blender1b_a[1])) & 0xff;
+            else {
+                wstate->inv_pixel_color.a = (~(*wstate->blender1b_a[1])) & 0xff;
 
                 blender_equation_cycle1_gval(wstate, &g);
             }
-        }
-        else
+        } else
             g = *wstate->blender2a_g[1];
 
         if (wstate->other_modes.rgb_dither_sel != 3)
@@ -304,48 +274,43 @@ void rejected_hbwrite_2cycle(struct rdp_state* wstate, int cdith, uint32_t blend
         gval = (g & 1) ? 3 : 0;
     }
 
-    switch (fbsel)
-    {
-    case PIXEL_SIZE_4BIT:
-        break;
-    case PIXEL_SIZE_8BIT:
-        if (flip && *delayedhbwidx >= 0)
-        {
-            if ((uint32_t)*delayedhbwidx < fb)
-            {
-                if (rdram_valid_idx8((uint32_t)*delayedhbwidx))
-                {
-                    int oldhbidx = *delayedhbwidx >> 1;
-                    rdram_hidden[oldhbidx] &= ~2;
-                    rdram_hidden[oldhbidx] |= rdram_hidden_old[oldhbidx & 7] & 2;
+    switch (fbsel) {
+        case PIXEL_SIZE_4BIT:
+            break;
+        case PIXEL_SIZE_8BIT:
+            if (flip && *delayedhbwidx >= 0) {
+                if ((uint32_t)*delayedhbwidx < fb) {
+                    if (rdram_valid_idx8((uint32_t)*delayedhbwidx)) {
+                        int oldhbidx = *delayedhbwidx >> 1;
+                        rdram_hidden[oldhbidx] &= ~2;
+                        rdram_hidden[oldhbidx] |= rdram_hidden_old[oldhbidx & 7] & 2;
+                    }
+                } else if (rdram_valid_idx8(fb)) {
+                    rdram_hidden[fb >> 1] &= ~2;
+                    rdram_hidden[fb >> 1] |= gval & 2;
                 }
-            }
-            else if (rdram_valid_idx8(fb))
-            {
-                rdram_hidden[fb >> 1] &= ~2;
-                rdram_hidden[fb >> 1] |= gval & 2;
+
+                *delayedhbwidx = -1;
             }
 
-            *delayedhbwidx = -1;
-        }
-
-        rdram_hidden_old[(fb >> 1) & 7] = gval & 0xff;
-        break;
-    case PIXEL_SIZE_16BIT:
-        fb = (wstate->fb_address >> 1) + curpixel;
-        if (wstate->fb_format == FORMAT_RGBA)
-            hval = finalize_spanalpha(wstate->other_modes.cvg_dest, blend_en, curpixel_cvg, curpixel_memcvg) & 3;
-        rdram_hidden_old[fb & 7] = hval & 0xff;
-        break;
-    case PIXEL_SIZE_32BIT:
-        fb = (wstate->fb_address >> 2) + curpixel;
-        rdram_hidden_old[(fb << 1) & 7] = gval & 0xff;
-        rdram_hidden_old[((fb << 1) + 1) & 7] = 0;
-        break;
+            rdram_hidden_old[(fb >> 1) & 7] = gval & 0xff;
+            break;
+        case PIXEL_SIZE_16BIT:
+            fb = (wstate->fb_address >> 1) + curpixel;
+            if (wstate->fb_format == FORMAT_RGBA)
+                hval = finalize_spanalpha(wstate->other_modes.cvg_dest, blend_en, curpixel_cvg, curpixel_memcvg) & 3;
+            rdram_hidden_old[fb & 7] = hval & 0xff;
+            break;
+        case PIXEL_SIZE_32BIT:
+            fb = (wstate->fb_address >> 2) + curpixel;
+            rdram_hidden_old[(fb << 1) & 7] = gval & 0xff;
+            rdram_hidden_old[((fb << 1) + 1) & 7] = 0;
+            break;
     }
 }
 
-static void render_spans_1cycle_complete(struct rdp_state* wstate, int start, int end, int tilenum, int flip)
+static void
+render_spans_1cycle_complete(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
     int zb = wstate->zb_address >> 1;
     int zbcur;
@@ -366,8 +331,7 @@ static void render_spans_1cycle_complete(struct rdp_state* wstate, int start, in
     int drinc, dginc, dbinc, dainc, dzinc, dsinc, dtinc, dwinc;
     int xinc;
 
-    if (flip)
-    {
+    if (flip) {
         drinc = wstate->spans_dr;
         dginc = wstate->spans_dg;
         dbinc = wstate->spans_db;
@@ -377,9 +341,7 @@ static void render_spans_1cycle_complete(struct rdp_state* wstate, int start, in
         dtinc = wstate->spans_dt;
         dwinc = wstate->spans_dw;
         xinc = 1;
-    }
-    else
-    {
+    } else {
         drinc = -wstate->spans_dr;
         dginc = -wstate->spans_dg;
         dbinc = -wstate->spans_db;
@@ -394,8 +356,7 @@ static void render_spans_1cycle_complete(struct rdp_state* wstate, int start, in
     int dzpix;
     if (!wstate->other_modes.z_source_sel)
         dzpix = wstate->spans_dzpix;
-    else
-    {
+    else {
         dzpix = wstate->primitive_delta_z;
         dzinc = wstate->spans_cdz = wstate->spans_dzdy = 0;
     }
@@ -413,149 +374,132 @@ static void render_spans_1cycle_complete(struct rdp_state* wstate, int start, in
     int delayedhbwidx = -1;
     int wen;
 
-    for (i = start; i <= end; i++)
-    {
-        if (wstate->span[i].validline)
-        {
+    for (i = start; i <= end; i++) {
+        if (wstate->span[i].validline) {
 
-        xstart = wstate->span[i].lx;
-        xend = wstate->span[i].unscrx;
-        xendsc = wstate->span[i].rx;
-        r = wstate->span[i].r;
-        g = wstate->span[i].g;
-        b = wstate->span[i].b;
-        a = wstate->span[i].a;
-        z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
-        s = wstate->span[i].s;
-        t = wstate->span[i].t;
-        w = wstate->span[i].w;
+            xstart = wstate->span[i].lx;
+            xend = wstate->span[i].unscrx;
+            xendsc = wstate->span[i].rx;
+            r = wstate->span[i].r;
+            g = wstate->span[i].g;
+            b = wstate->span[i].b;
+            a = wstate->span[i].a;
+            z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
+            s = wstate->span[i].s;
+            t = wstate->span[i].t;
+            w = wstate->span[i].w;
 
-        x = xendsc;
-        curpixel = wstate->fb_width * i + x;
-        zbcur = zb + curpixel;
+            x = xendsc;
+            curpixel = wstate->fb_width * i + x;
+            zbcur = zb + curpixel;
 
-        if (!flip)
-        {
-            length = xendsc - xstart;
-            scdiff = xend - xendsc;
-            compute_cvg_noflip(wstate, i);
-        }
-        else
-        {
-            length = xstart - xendsc;
-            scdiff = xendsc - xend;
-            compute_cvg_flip(wstate, i);
-        }
-
-
-
-        if (scdiff)
-        {
-
-
-            scdiff &= 0xfff;
-            r += (drinc * scdiff);
-            g += (dginc * scdiff);
-            b += (dbinc * scdiff);
-            a += (dainc * scdiff);
-            z += (dzinc * scdiff);
-            s += (dsinc * scdiff);
-            t += (dtinc * scdiff);
-            w += (dwinc * scdiff);
-        }
-
-        lodlength = length + scdiff;
-
-        sigs.longspan = (lodlength > 7);
-        sigs.midspan = (lodlength == 7);
-        sigs.onelessthanmid = (lodlength == 6);
-
-        for (j = 0; j <= length; j++)
-        {
-            sr = r >> 14;
-            sg = g >> 14;
-            sb = b >> 14;
-            sa = a >> 14;
-            ss = s >> 16;
-            st = t >> 16;
-            sw = w >> 16;
-            sz = (z >> 10) & 0x3fffff;
-
-
-            sigs.endspan = (j == length);
-            sigs.preendspan = (j == (length - 1));
-
-            lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
-
-
-            get_texel1_1cycle(wstate, &news, &newt, s, t, w, dsinc, dtinc, dwinc, i, &sigs);
-
-
-
-            if (j)
-            {
-                wstate->texel0_color = wstate->texel1_color;
-                wstate->lod_frac = prelodfrac;
-            }
-            else
-            {
-                wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
-
-
-                tclod_1cycle_current(wstate, &sss, &sst, news, newt, s, t, w, dsinc, dtinc, dwinc, i, prim_tile, &tile1, &sigs);
-
-
-
-
-                texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
+            if (!flip) {
+                length = xendsc - xstart;
+                scdiff = xend - xendsc;
+                compute_cvg_noflip(wstate, i);
+            } else {
+                length = xstart - xendsc;
+                scdiff = xendsc - xend;
+                compute_cvg_flip(wstate, i);
             }
 
-            sigs.nextspan = sigs.endspan;
-            sigs.endspan = sigs.preendspan;
-            sigs.preendspan = (j == (length - 2));
+            if (scdiff) {
 
-            s += dsinc;
-            t += dtinc;
-            w += dwinc;
-
-            tclod_1cycle_next(wstate, &news, &newt, s, t, w, dsinc, dtinc, dwinc, i, prim_tile, &newtile, &sigs, &prelodfrac);
-
-            texture_pipeline_cycle(wstate, &wstate->texel1_color, &wstate->texel1_color, news, newt, newtile, 0);
-
-            rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
-            z_correct(wstate, offx, offy, &sz, curpixel_cvg);
-
-            if (wstate->other_modes.f.getditherlevel < 2)
-                get_dither_noise(wstate, x, i, &cdith, &adith);
-
-            combiner_1cycle(wstate, adith, &curpixel_cvg);
-
-            wstate->fbread1_ptr(wstate, curpixel, &curpixel_memcvg);
-
-            wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg, curpixel_memcvg);
-
-            if (wen)
-                wen = blender_1cycle(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap, curpixel_cvg, curpixel_cvbit);
-
-            if (wen)
-            {
-                wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
-                if (wstate->other_modes.z_update_en)
-                    z_store(zbcur, sz, dzpixenc);
+                scdiff &= 0xfff;
+                r += (drinc * scdiff);
+                g += (dginc * scdiff);
+                b += (dbinc * scdiff);
+                a += (dainc * scdiff);
+                z += (dzinc * scdiff);
+                s += (dsinc * scdiff);
+                t += (dtinc * scdiff);
+                w += (dwinc * scdiff);
             }
-            else if (i >= wstate->last_overwriting_scanline)
-                rejected_hbwrite_1cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
 
-            r += drinc;
-            g += dginc;
-            b += dbinc;
-            a += dainc;
-            z += dzinc;
+            lodlength = length + scdiff;
 
-            x += xinc;
-            curpixel += xinc;
-            zbcur += xinc;
-        }
+            sigs.longspan = (lodlength > 7);
+            sigs.midspan = (lodlength == 7);
+            sigs.onelessthanmid = (lodlength == 6);
+
+            for (j = 0; j <= length; j++) {
+                sr = r >> 14;
+                sg = g >> 14;
+                sb = b >> 14;
+                sa = a >> 14;
+                ss = s >> 16;
+                st = t >> 16;
+                sw = w >> 16;
+                sz = (z >> 10) & 0x3fffff;
+
+                sigs.endspan = (j == length);
+                sigs.preendspan = (j == (length - 1));
+
+                lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+
+                get_texel1_1cycle(wstate, &news, &newt, s, t, w, dsinc, dtinc, dwinc, i, &sigs);
+
+                if (j) {
+                    wstate->texel0_color = wstate->texel1_color;
+                    wstate->lod_frac = prelodfrac;
+                } else {
+                    wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
+
+                    tclod_1cycle_current(wstate, &sss, &sst, news, newt, s, t, w, dsinc, dtinc, dwinc, i, prim_tile,
+                                         &tile1, &sigs);
+
+                    texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
+                }
+
+                sigs.nextspan = sigs.endspan;
+                sigs.endspan = sigs.preendspan;
+                sigs.preendspan = (j == (length - 2));
+
+                s += dsinc;
+                t += dtinc;
+                w += dwinc;
+
+                tclod_1cycle_next(wstate, &news, &newt, s, t, w, dsinc, dtinc, dwinc, i, prim_tile, &newtile, &sigs,
+                                  &prelodfrac);
+
+                texture_pipeline_cycle(wstate, &wstate->texel1_color, &wstate->texel1_color, news, newt, newtile, 0);
+
+                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+                z_correct(wstate, offx, offy, &sz, curpixel_cvg);
+
+                if (wstate->other_modes.f.getditherlevel < 2)
+                    get_dither_noise(wstate, x, i, &cdith, &adith);
+
+                combiner_1cycle(wstate, adith, &curpixel_cvg);
+
+                wstate->fbread1_ptr(wstate, curpixel, &curpixel_memcvg);
+
+                wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg,
+                                curpixel_memcvg);
+
+                if (wen)
+                    wen = blender_1cycle(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap, curpixel_cvg,
+                                         curpixel_cvbit);
+
+                if (wen) {
+                    wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
+                                        &delayedhbwidx);
+                    if (wstate->other_modes.z_update_en)
+                        z_store(zbcur, sz, dzpixenc);
+                } else if (i >= wstate->last_overwriting_scanline)
+                    rejected_hbwrite_1cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
+                                            flip, &delayedhbwidx);
+
+                r += drinc;
+                g += dginc;
+                b += dbinc;
+                a += dainc;
+                z += dzinc;
+
+                x += xinc;
+                curpixel += xinc;
+                zbcur += xinc;
+            }
         }
     }
 
@@ -563,8 +507,8 @@ static void render_spans_1cycle_complete(struct rdp_state* wstate, int start, in
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
 
-
-static void render_spans_1cycle_notexel1(struct rdp_state* wstate, int start, int end, int tilenum, int flip)
+static void
+render_spans_1cycle_notexel1(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
     int zb = wstate->zb_address >> 1;
     int zbcur;
@@ -582,8 +526,7 @@ static void render_spans_1cycle_notexel1(struct rdp_state* wstate, int start, in
 
     int drinc, dginc, dbinc, dainc, dzinc, dsinc, dtinc, dwinc;
     int xinc;
-    if (flip)
-    {
+    if (flip) {
         drinc = wstate->spans_dr;
         dginc = wstate->spans_dg;
         dbinc = wstate->spans_db;
@@ -593,9 +536,7 @@ static void render_spans_1cycle_notexel1(struct rdp_state* wstate, int start, in
         dtinc = wstate->spans_dt;
         dwinc = wstate->spans_dw;
         xinc = 1;
-    }
-    else
-    {
+    } else {
         drinc = -wstate->spans_dr;
         dginc = -wstate->spans_dg;
         dbinc = -wstate->spans_db;
@@ -610,8 +551,7 @@ static void render_spans_1cycle_notexel1(struct rdp_state* wstate, int start, in
     int dzpix;
     if (!wstate->other_modes.z_source_sel)
         dzpix = wstate->spans_dzpix;
-    else
-    {
+    else {
         dzpix = wstate->primitive_delta_z;
         dzinc = wstate->spans_cdz = wstate->spans_dzdy = 0;
     }
@@ -628,119 +568,113 @@ static void render_spans_1cycle_notexel1(struct rdp_state* wstate, int start, in
     int delayedhbwidx = -1;
     int wen;
 
-    for (i = start; i <= end; i++)
-    {
-        if (wstate->span[i].validline)
-        {
+    for (i = start; i <= end; i++) {
+        if (wstate->span[i].validline) {
 
-        xstart = wstate->span[i].lx;
-        xend = wstate->span[i].unscrx;
-        xendsc = wstate->span[i].rx;
-        r = wstate->span[i].r;
-        g = wstate->span[i].g;
-        b = wstate->span[i].b;
-        a = wstate->span[i].a;
-        z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
-        s = wstate->span[i].s;
-        t = wstate->span[i].t;
-        w = wstate->span[i].w;
+            xstart = wstate->span[i].lx;
+            xend = wstate->span[i].unscrx;
+            xendsc = wstate->span[i].rx;
+            r = wstate->span[i].r;
+            g = wstate->span[i].g;
+            b = wstate->span[i].b;
+            a = wstate->span[i].a;
+            z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
+            s = wstate->span[i].s;
+            t = wstate->span[i].t;
+            w = wstate->span[i].w;
 
-        x = xendsc;
-        curpixel = wstate->fb_width * i + x;
-        zbcur = zb + curpixel;
+            x = xendsc;
+            curpixel = wstate->fb_width * i + x;
+            zbcur = zb + curpixel;
 
-        if (!flip)
-        {
-            length = xendsc - xstart;
-            scdiff = xend - xendsc;
-            compute_cvg_noflip(wstate, i);
-        }
-        else
-        {
-            length = xstart - xendsc;
-            scdiff = xendsc - xend;
-            compute_cvg_flip(wstate, i);
-        }
-
-        if (scdiff)
-        {
-            scdiff &= 0xfff;
-            r += (drinc * scdiff);
-            g += (dginc * scdiff);
-            b += (dbinc * scdiff);
-            a += (dainc * scdiff);
-            z += (dzinc * scdiff);
-            s += (dsinc * scdiff);
-            t += (dtinc * scdiff);
-            w += (dwinc * scdiff);
-        }
-
-        lodlength = length + scdiff;
-
-        sigs.longspan = (lodlength > 7);
-        sigs.midspan = (lodlength == 7);
-
-        for (j = 0; j <= length; j++)
-        {
-            sr = r >> 14;
-            sg = g >> 14;
-            sb = b >> 14;
-            sa = a >> 14;
-            ss = s >> 16;
-            st = t >> 16;
-            sw = w >> 16;
-            sz = (z >> 10) & 0x3fffff;
-
-
-
-            sigs.endspan = (j == length);
-            sigs.preendspan = (j == (length - 1));
-
-            lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
-
-            wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
-
-            tclod_1cycle_current_simple(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, i, prim_tile, &tile1, &sigs);
-
-            texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
-
-            rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
-            z_correct(wstate, offx, offy, &sz, curpixel_cvg);
-
-            if (wstate->other_modes.f.getditherlevel < 2)
-                get_dither_noise(wstate, x, i, &cdith, &adith);
-
-            combiner_1cycle(wstate, adith, &curpixel_cvg);
-
-            wstate->fbread1_ptr(wstate, curpixel, &curpixel_memcvg);
-
-            wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg, curpixel_memcvg);
-
-            if (wen)
-                wen = blender_1cycle(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap, curpixel_cvg, curpixel_cvbit);
-
-            if (wen)
-            {
-                wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
-                if (wstate->other_modes.z_update_en)
-                    z_store(zbcur, sz, dzpixenc);
+            if (!flip) {
+                length = xendsc - xstart;
+                scdiff = xend - xendsc;
+                compute_cvg_noflip(wstate, i);
+            } else {
+                length = xstart - xendsc;
+                scdiff = xendsc - xend;
+                compute_cvg_flip(wstate, i);
             }
-            else if (i >= wstate->last_overwriting_scanline)
-                rejected_hbwrite_1cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
 
-            s += dsinc;
-            t += dtinc;
-            w += dwinc;
-            r += drinc;
-            g += dginc;
-            b += dbinc;
-            a += dainc;
-            z += dzinc;
+            if (scdiff) {
+                scdiff &= 0xfff;
+                r += (drinc * scdiff);
+                g += (dginc * scdiff);
+                b += (dbinc * scdiff);
+                a += (dainc * scdiff);
+                z += (dzinc * scdiff);
+                s += (dsinc * scdiff);
+                t += (dtinc * scdiff);
+                w += (dwinc * scdiff);
+            }
 
-            x += xinc;
-            curpixel += xinc;
-            zbcur += xinc;
-        }
+            lodlength = length + scdiff;
+
+            sigs.longspan = (lodlength > 7);
+            sigs.midspan = (lodlength == 7);
+
+            for (j = 0; j <= length; j++) {
+                sr = r >> 14;
+                sg = g >> 14;
+                sb = b >> 14;
+                sa = a >> 14;
+                ss = s >> 16;
+                st = t >> 16;
+                sw = w >> 16;
+                sz = (z >> 10) & 0x3fffff;
+
+                sigs.endspan = (j == length);
+                sigs.preendspan = (j == (length - 1));
+
+                lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+
+                wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
+
+                tclod_1cycle_current_simple(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, i, prim_tile, &tile1,
+                                            &sigs);
+
+                texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
+
+                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+                z_correct(wstate, offx, offy, &sz, curpixel_cvg);
+
+                if (wstate->other_modes.f.getditherlevel < 2)
+                    get_dither_noise(wstate, x, i, &cdith, &adith);
+
+                combiner_1cycle(wstate, adith, &curpixel_cvg);
+
+                wstate->fbread1_ptr(wstate, curpixel, &curpixel_memcvg);
+
+                wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg,
+                                curpixel_memcvg);
+
+                if (wen)
+                    wen = blender_1cycle(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap, curpixel_cvg,
+                                         curpixel_cvbit);
+
+                if (wen) {
+                    wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
+                                        &delayedhbwidx);
+                    if (wstate->other_modes.z_update_en)
+                        z_store(zbcur, sz, dzpixenc);
+                } else if (i >= wstate->last_overwriting_scanline)
+                    rejected_hbwrite_1cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
+                                            flip, &delayedhbwidx);
+
+                s += dsinc;
+                t += dtinc;
+                w += dwinc;
+                r += drinc;
+                g += dginc;
+                b += dbinc;
+                a += dainc;
+                z += dzinc;
+
+                x += xinc;
+                curpixel += xinc;
+                zbcur += xinc;
+            }
         }
     }
 
@@ -748,8 +682,8 @@ static void render_spans_1cycle_notexel1(struct rdp_state* wstate, int start, in
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
 
-
-static void render_spans_1cycle_notex(struct rdp_state* wstate, int start, int end, int tilenum, int flip)
+static void
+render_spans_1cycle_notex(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
     UNUSED(tilenum);
 
@@ -766,17 +700,14 @@ static void render_spans_1cycle_notex(struct rdp_state* wstate, int start, int e
     int drinc, dginc, dbinc, dainc, dzinc;
     int xinc;
 
-    if (flip)
-    {
+    if (flip) {
         drinc = wstate->spans_dr;
         dginc = wstate->spans_dg;
         dbinc = wstate->spans_db;
         dainc = wstate->spans_da;
         dzinc = wstate->spans_dz;
         xinc = 1;
-    }
-    else
-    {
+    } else {
         drinc = -wstate->spans_dr;
         dginc = -wstate->spans_dg;
         dbinc = -wstate->spans_db;
@@ -788,8 +719,7 @@ static void render_spans_1cycle_notex(struct rdp_state* wstate, int start, int e
     int dzpix;
     if (!wstate->other_modes.z_source_sel)
         dzpix = wstate->spans_dzpix;
-    else
-    {
+    else {
         dzpix = wstate->primitive_delta_z;
         dzinc = wstate->spans_cdz = wstate->spans_dzdy = 0;
     }
@@ -805,91 +735,86 @@ static void render_spans_1cycle_notex(struct rdp_state* wstate, int start, int e
     int delayedhbwidx = -1;
     int wen;
 
-    for (i = start; i <= end; i++)
-    {
-        if (wstate->span[i].validline)
-        {
+    for (i = start; i <= end; i++) {
+        if (wstate->span[i].validline) {
 
-        xstart = wstate->span[i].lx;
-        xend = wstate->span[i].unscrx;
-        xendsc = wstate->span[i].rx;
-        r = wstate->span[i].r;
-        g = wstate->span[i].g;
-        b = wstate->span[i].b;
-        a = wstate->span[i].a;
-        z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
+            xstart = wstate->span[i].lx;
+            xend = wstate->span[i].unscrx;
+            xendsc = wstate->span[i].rx;
+            r = wstate->span[i].r;
+            g = wstate->span[i].g;
+            b = wstate->span[i].b;
+            a = wstate->span[i].a;
+            z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
 
-        x = xendsc;
-        curpixel = wstate->fb_width * i + x;
-        zbcur = zb + curpixel;
+            x = xendsc;
+            curpixel = wstate->fb_width * i + x;
+            zbcur = zb + curpixel;
 
-        if (!flip)
-        {
-            length = xendsc - xstart;
-            scdiff = xend - xendsc;
-            compute_cvg_noflip(wstate, i);
-        }
-        else
-        {
-            length = xstart - xendsc;
-            scdiff = xendsc - xend;
-            compute_cvg_flip(wstate, i);
-        }
-
-        if (scdiff)
-        {
-            scdiff &= 0xfff;
-            r += (drinc * scdiff);
-            g += (dginc * scdiff);
-            b += (dbinc * scdiff);
-            a += (dainc * scdiff);
-            z += (dzinc * scdiff);
-        }
-
-        for (j = 0; j <= length; j++)
-        {
-            sr = r >> 14;
-            sg = g >> 14;
-            sb = b >> 14;
-            sa = a >> 14;
-            sz = (z >> 10) & 0x3fffff;
-
-            lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
-
-            rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
-            z_correct(wstate, offx, offy, &sz, curpixel_cvg);
-
-            if (wstate->other_modes.f.getditherlevel < 2)
-                get_dither_noise(wstate, x, i, &cdith, &adith);
-
-            combiner_1cycle(wstate, adith, &curpixel_cvg);
-
-            wstate->fbread1_ptr(wstate, curpixel, &curpixel_memcvg);
-
-            wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg, curpixel_memcvg);
-
-            if (wen)
-                wen = blender_1cycle(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap, curpixel_cvg, curpixel_cvbit);
-
-            if (wen)
-            {
-                wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
-                if (wstate->other_modes.z_update_en)
-                    z_store(zbcur, sz, dzpixenc);
+            if (!flip) {
+                length = xendsc - xstart;
+                scdiff = xend - xendsc;
+                compute_cvg_noflip(wstate, i);
+            } else {
+                length = xstart - xendsc;
+                scdiff = xendsc - xend;
+                compute_cvg_flip(wstate, i);
             }
-            else if (i >= wstate->last_overwriting_scanline)
-                rejected_hbwrite_1cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
 
-            r += drinc;
-            g += dginc;
-            b += dbinc;
-            a += dainc;
-            z += dzinc;
+            if (scdiff) {
+                scdiff &= 0xfff;
+                r += (drinc * scdiff);
+                g += (dginc * scdiff);
+                b += (dbinc * scdiff);
+                a += (dainc * scdiff);
+                z += (dzinc * scdiff);
+            }
 
-            x += xinc;
-            curpixel += xinc;
-            zbcur += xinc;
-        }
+            for (j = 0; j <= length; j++) {
+                sr = r >> 14;
+                sg = g >> 14;
+                sb = b >> 14;
+                sa = a >> 14;
+                sz = (z >> 10) & 0x3fffff;
+
+                lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+
+                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+                z_correct(wstate, offx, offy, &sz, curpixel_cvg);
+
+                if (wstate->other_modes.f.getditherlevel < 2)
+                    get_dither_noise(wstate, x, i, &cdith, &adith);
+
+                combiner_1cycle(wstate, adith, &curpixel_cvg);
+
+                wstate->fbread1_ptr(wstate, curpixel, &curpixel_memcvg);
+
+                wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg,
+                                curpixel_memcvg);
+
+                if (wen)
+                    wen = blender_1cycle(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap, curpixel_cvg,
+                                         curpixel_cvbit);
+
+                if (wen) {
+                    wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
+                                        &delayedhbwidx);
+                    if (wstate->other_modes.z_update_en)
+                        z_store(zbcur, sz, dzpixenc);
+                } else if (i >= wstate->last_overwriting_scanline)
+                    rejected_hbwrite_1cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
+                                            flip, &delayedhbwidx);
+
+                r += drinc;
+                g += dginc;
+                b += dbinc;
+                a += dainc;
+                z += dzinc;
+
+                x += xinc;
+                curpixel += xinc;
+                zbcur += xinc;
+            }
         }
     }
 
@@ -897,7 +822,8 @@ static void render_spans_1cycle_notex(struct rdp_state* wstate, int start, int e
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
 
-static void render_spans_2cycle_complete(struct rdp_state* wstate, int start, int end, int tilenum, int flip)
+static void
+render_spans_2cycle_complete(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
     int zb = wstate->zb_address >> 1;
     int zbcur;
@@ -911,8 +837,6 @@ static void render_spans_2cycle_complete(struct rdp_state* wstate, int start, in
     uint32_t nextpixel_cvg;
     uint32_t acalpha;
 
-
-
     int tile2 = (tilenum + 1) & 7;
     int tile1 = tilenum;
     int prim_tile = tilenum;
@@ -922,8 +846,7 @@ static void render_spans_2cycle_complete(struct rdp_state* wstate, int start, in
 
     int drinc, dginc, dbinc, dainc, dzinc, dsinc, dtinc, dwinc;
     int xinc;
-    if (flip)
-    {
+    if (flip) {
         drinc = wstate->spans_dr;
         dginc = wstate->spans_dg;
         dbinc = wstate->spans_db;
@@ -933,9 +856,7 @@ static void render_spans_2cycle_complete(struct rdp_state* wstate, int start, in
         dtinc = wstate->spans_dt;
         dwinc = wstate->spans_dw;
         xinc = 1;
-    }
-    else
-    {
+    } else {
         drinc = -wstate->spans_dr;
         dginc = -wstate->spans_dg;
         dbinc = -wstate->spans_db;
@@ -950,8 +871,7 @@ static void render_spans_2cycle_complete(struct rdp_state* wstate, int start, in
     int dzpix;
     if (!wstate->other_modes.z_source_sel)
         dzpix = wstate->spans_dzpix;
-    else
-    {
+    else {
         dzpix = wstate->primitive_delta_z;
         dzinc = wstate->spans_cdz = wstate->spans_dzdy = 0;
     }
@@ -970,197 +890,175 @@ static void render_spans_2cycle_complete(struct rdp_state* wstate, int start, in
     uint32_t fir, fig, fib;
     int delayedhbwidx = -1;
 
-    for (i = start; i <= end; i++)
-    {
-        if (wstate->span[i].validline)
-        {
+    for (i = start; i <= end; i++) {
+        if (wstate->span[i].validline) {
 
-        xstart = wstate->span[i].lx;
-        xend = wstate->span[i].unscrx;
-        xendsc = wstate->span[i].rx;
-        r = wstate->span[i].r;
-        g = wstate->span[i].g;
-        b = wstate->span[i].b;
-        a = wstate->span[i].a;
-        z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
-        s = wstate->span[i].s;
-        t = wstate->span[i].t;
-        w = wstate->span[i].w;
+            xstart = wstate->span[i].lx;
+            xend = wstate->span[i].unscrx;
+            xendsc = wstate->span[i].rx;
+            r = wstate->span[i].r;
+            g = wstate->span[i].g;
+            b = wstate->span[i].b;
+            a = wstate->span[i].a;
+            z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
+            s = wstate->span[i].s;
+            t = wstate->span[i].t;
+            w = wstate->span[i].w;
 
-        x = xendsc;
-        curpixel = wstate->fb_width * i + x;
-        zbcur = zb + curpixel;
+            x = xendsc;
+            curpixel = wstate->fb_width * i + x;
+            zbcur = zb + curpixel;
 
-        if (!flip)
-        {
-            length = xendsc - xstart;
-            scdiff = xend - xendsc;
-            compute_cvg_noflip(wstate, i);
-        }
-        else
-        {
-            length = xstart - xendsc;
-            scdiff = xendsc - xend;
-            compute_cvg_flip(wstate, i);
-        }
+            if (!flip) {
+                length = xendsc - xstart;
+                scdiff = xend - xendsc;
+                compute_cvg_noflip(wstate, i);
+            } else {
+                length = xstart - xendsc;
+                scdiff = xendsc - xend;
+                compute_cvg_flip(wstate, i);
+            }
 
+            if (scdiff) {
+                scdiff &= 0xfff;
+                r += (drinc * scdiff);
+                g += (dginc * scdiff);
+                b += (dbinc * scdiff);
+                a += (dainc * scdiff);
+                z += (dzinc * scdiff);
+                s += (dsinc * scdiff);
+                t += (dtinc * scdiff);
+                w += (dwinc * scdiff);
+            }
 
+            lodlength = length + scdiff;
 
+            for (j = 0; j <= length; j++) {
+                sz = (z >> 10) & 0x3fffff;
 
+                if (!j) {
+                    sr = r >> 14;
+                    sg = g >> 14;
+                    sb = b >> 14;
+                    sa = a >> 14;
+                    ss = s >> 16;
+                    st = t >> 16;
+                    sw = w >> 16;
 
+                    wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
 
+                    tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2,
+                                 &wstate->lod_frac);
 
+                    texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
+                    texture_pipeline_cycle(wstate, &wstate->texel1_color, &wstate->texel0_color, sss, sst, tile2, 1);
 
-        if (scdiff)
-        {
-            scdiff &= 0xfff;
-            r += (drinc * scdiff);
-            g += (dginc * scdiff);
-            b += (dbinc * scdiff);
-            a += (dainc * scdiff);
-            z += (dzinc * scdiff);
-            s += (dsinc * scdiff);
-            t += (dtinc * scdiff);
-            w += (dwinc * scdiff);
-        }
+                    lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
 
-        lodlength = length + scdiff;
+                    rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
 
-        for (j = 0; j <= length; j++)
-        {
-            sz = (z >> 10) & 0x3fffff;
+                    if (wstate->other_modes.f.getditherlevel < 2)
+                        get_dither_noise(wstate, x, i, &cdith, &adith);
 
-            if (!j)
-            {
-                sr = r >> 14;
-                sg = g >> 14;
-                sb = b >> 14;
-                sa = a >> 14;
+                    combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
+                }
+
+                s += dsinc;
+                t += dtinc;
+                w += dwinc;
+
                 ss = s >> 16;
                 st = t >> 16;
                 sw = w >> 16;
 
                 wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
 
-                tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2, &wstate->lod_frac);
+                if (j < length || !wstate->span[i + 1].validline || lodlength < 3) {
+                    tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2,
+                                 &prelodfrac);
 
-                texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
-                texture_pipeline_cycle(wstate, &wstate->texel1_color, &wstate->texel0_color, sss, sst, tile2, 1);
+                    texture_pipeline_cycle(wstate, &wstate->nexttexel_color, &wstate->nexttexel_color, sss, sst, tile1,
+                                           0);
+                    texture_pipeline_cycle(wstate, &nexttexel1_color, &wstate->nexttexel_color, sss, sst, tile2, 1);
+                } else {
+                    int sss2, sst2;
 
-                lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+                    ss = wstate->span[i + 1].s >> 16;
+                    st = wstate->span[i + 1].t >> 16;
+                    sw = wstate->span[i + 1].w >> 16;
+                    wstate->tcdiv_ptr(ss, st, sw, &sss2, &sst2);
 
-                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+                    tclod_2cycle_next(wstate, &sss, &sst, &sss2, &sst2, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1,
+                                      &tile3, &prelodfrac, i);
+
+                    texture_pipeline_cycle(wstate, &wstate->nexttexel_color, &wstate->nexttexel_color, sss, sst, tile1,
+                                           0);
+                    texture_pipeline_cycle(wstate, &nexttexel1_color, &wstate->nexttexel_color, sss2, sst2, tile3, 0);
+                }
+
+                z_correct(wstate, offx, offy, &sz, curpixel_cvg);
+
+                combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
+
+                wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
+
+                wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg,
+                                curpixel_memcvg);
+
+                if (wen)
+                    wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
+
+                if (!wen && i >= wstate->last_overwriting_scanline)
+                    blender_2cycle_cycle0_gval(wstate, curpixel);
+
+                wstate->memory_color = wstate->pre_memory_color;
+
+                x += xinc;
+
+                r += drinc;
+                g += dginc;
+                b += dbinc;
+                a += dainc;
+
+                sr = r >> 14;
+                sg = g >> 14;
+                sb = b >> 14;
+                sa = a >> 14;
+
+                lookup_cvmask_derivatives(j < length ? wstate->cvgbuf[x] : 0, &offx, &offy, &nextpixel_cvg,
+                                          &curpixel_cvbit);
+
+                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, nextpixel_cvg);
+
+                wstate->lod_frac = prelodfrac;
+                wstate->texel0_color = wstate->nexttexel_color;
+                wstate->texel1_color = nexttexel1_color;
+
+                combiner_2cycle_cycle0(wstate, adith, nextpixel_cvg, &acalpha);
+
+                if (wen)
+                    wen = alpha_compare(wstate, acalpha);
+
+                if (wen) {
+                    blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
+                    wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
+                                        &delayedhbwidx);
+                    if (wstate->other_modes.z_update_en)
+                        z_store(zbcur, sz, dzpixenc);
+                } else if (i >= wstate->last_overwriting_scanline)
+                    rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
+                                            flip, &delayedhbwidx);
 
                 if (wstate->other_modes.f.getditherlevel < 2)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
-                combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
+                curpixel_cvg = nextpixel_cvg;
+
+                z += dzinc;
+
+                curpixel += xinc;
+                zbcur += xinc;
             }
-
-
-
-            s += dsinc;
-            t += dtinc;
-            w += dwinc;
-
-            ss = s >> 16;
-            st = t >> 16;
-            sw = w >> 16;
-
-            wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
-
-            if (j < length || !wstate->span[i + 1].validline || lodlength < 3)
-            {
-                tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2, &prelodfrac);
-
-                texture_pipeline_cycle(wstate, &wstate->nexttexel_color, &wstate->nexttexel_color, sss, sst, tile1, 0);
-                texture_pipeline_cycle(wstate, &nexttexel1_color, &wstate->nexttexel_color, sss, sst, tile2, 1);
-            }
-            else
-            {
-                int sss2, sst2;
-
-                ss = wstate->span[i + 1].s >> 16;
-                st = wstate->span[i + 1].t >> 16;
-                sw = wstate->span[i + 1].w >> 16;
-                wstate->tcdiv_ptr(ss, st, sw, &sss2, &sst2);
-
-                tclod_2cycle_next(wstate, &sss, &sst, &sss2, &sst2, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile3, &prelodfrac, i);
-
-                texture_pipeline_cycle(wstate, &wstate->nexttexel_color, &wstate->nexttexel_color, sss, sst, tile1, 0);
-                texture_pipeline_cycle(wstate, &nexttexel1_color, &wstate->nexttexel_color, sss2, sst2, tile3, 0);
-            }
-
-            z_correct(wstate, offx, offy, &sz, curpixel_cvg);
-
-            combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
-
-            wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
-
-            wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg, curpixel_memcvg);
-
-            if (wen)
-                wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
-
-            if (!wen && i >= wstate->last_overwriting_scanline)
-                blender_2cycle_cycle0_gval(wstate, curpixel);
-
-            wstate->memory_color = wstate->pre_memory_color;
-
-            x += xinc;
-
-            r += drinc;
-            g += dginc;
-            b += dbinc;
-            a += dainc;
-
-            sr = r >> 14;
-            sg = g >> 14;
-            sb = b >> 14;
-            sa = a >> 14;
-
-
-
-
-            lookup_cvmask_derivatives(j < length ? wstate->cvgbuf[x] : 0, &offx, &offy, &nextpixel_cvg, &curpixel_cvbit);
-
-            rgba_correct(wstate, offx, offy, sr, sg, sb, sa, nextpixel_cvg);
-
-            wstate->lod_frac = prelodfrac;
-            wstate->texel0_color = wstate->nexttexel_color;
-            wstate->texel1_color = nexttexel1_color;
-
-
-            combiner_2cycle_cycle0(wstate, adith, nextpixel_cvg, &acalpha);
-
-            if (wen)
-                wen = alpha_compare(wstate, acalpha);
-
-            if (wen)
-            {
-                blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
-                wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
-                if (wstate->other_modes.z_update_en)
-                    z_store(zbcur, sz, dzpixenc);
-            }
-            else if (i >= wstate->last_overwriting_scanline)
-                rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
-
-            if (wstate->other_modes.f.getditherlevel < 2)
-                get_dither_noise(wstate, x, i, &cdith, &adith);
-
-            curpixel_cvg = nextpixel_cvg;
-
-
-
-
-
-
-            z += dzinc;
-
-            curpixel += xinc;
-            zbcur += xinc;
-        }
         }
     }
 
@@ -1168,9 +1066,8 @@ static void render_spans_2cycle_complete(struct rdp_state* wstate, int start, in
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
 
-
-
-static void render_spans_2cycle_notexelnext(struct rdp_state* wstate, int start, int end, int tilenum, int flip)
+static void
+render_spans_2cycle_notexelnext(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
     int zb = wstate->zb_address >> 1;
     int zbcur;
@@ -1190,8 +1087,7 @@ static void render_spans_2cycle_notexelnext(struct rdp_state* wstate, int start,
 
     int drinc, dginc, dbinc, dainc, dzinc, dsinc, dtinc, dwinc;
     int xinc;
-    if (flip)
-    {
+    if (flip) {
         drinc = wstate->spans_dr;
         dginc = wstate->spans_dg;
         dbinc = wstate->spans_db;
@@ -1201,9 +1097,7 @@ static void render_spans_2cycle_notexelnext(struct rdp_state* wstate, int start,
         dtinc = wstate->spans_dt;
         dwinc = wstate->spans_dw;
         xinc = 1;
-    }
-    else
-    {
+    } else {
         drinc = -wstate->spans_dr;
         dginc = -wstate->spans_dg;
         dbinc = -wstate->spans_db;
@@ -1218,8 +1112,7 @@ static void render_spans_2cycle_notexelnext(struct rdp_state* wstate, int start,
     int dzpix;
     if (!wstate->other_modes.z_source_sel)
         dzpix = wstate->spans_dzpix;
-    else
-    {
+    else {
         dzpix = wstate->primitive_delta_z;
         dzinc = wstate->spans_cdz = wstate->spans_dzdy = 0;
     }
@@ -1238,59 +1131,104 @@ static void render_spans_2cycle_notexelnext(struct rdp_state* wstate, int start,
     uint32_t fir, fig, fib;
     int delayedhbwidx = -1;
 
-    for (i = start; i <= end; i++)
-    {
-        if (wstate->span[i].validline)
-        {
+    for (i = start; i <= end; i++) {
+        if (wstate->span[i].validline) {
 
-        xstart = wstate->span[i].lx;
-        xend = wstate->span[i].unscrx;
-        xendsc = wstate->span[i].rx;
-        r = wstate->span[i].r;
-        g = wstate->span[i].g;
-        b = wstate->span[i].b;
-        a = wstate->span[i].a;
-        z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
-        s = wstate->span[i].s;
-        t = wstate->span[i].t;
-        w = wstate->span[i].w;
+            xstart = wstate->span[i].lx;
+            xend = wstate->span[i].unscrx;
+            xendsc = wstate->span[i].rx;
+            r = wstate->span[i].r;
+            g = wstate->span[i].g;
+            b = wstate->span[i].b;
+            a = wstate->span[i].a;
+            z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
+            s = wstate->span[i].s;
+            t = wstate->span[i].t;
+            w = wstate->span[i].w;
 
-        x = xendsc;
-        curpixel = wstate->fb_width * i + x;
-        zbcur = zb + curpixel;
+            x = xendsc;
+            curpixel = wstate->fb_width * i + x;
+            zbcur = zb + curpixel;
 
-        if (!flip)
-        {
-            length = xendsc - xstart;
-            scdiff = xend - xendsc;
-            compute_cvg_noflip(wstate, i);
-        }
-        else
-        {
-            length = xstart - xendsc;
-            scdiff = xendsc - xend;
-            compute_cvg_flip(wstate, i);
-        }
+            if (!flip) {
+                length = xendsc - xstart;
+                scdiff = xend - xendsc;
+                compute_cvg_noflip(wstate, i);
+            } else {
+                length = xstart - xendsc;
+                scdiff = xendsc - xend;
+                compute_cvg_flip(wstate, i);
+            }
 
-        if (scdiff)
-        {
-            scdiff &= 0xfff;
-            r += (drinc * scdiff);
-            g += (dginc * scdiff);
-            b += (dbinc * scdiff);
-            a += (dainc * scdiff);
-            z += (dzinc * scdiff);
-            s += (dsinc * scdiff);
-            t += (dtinc * scdiff);
-            w += (dwinc * scdiff);
-        }
+            if (scdiff) {
+                scdiff &= 0xfff;
+                r += (drinc * scdiff);
+                g += (dginc * scdiff);
+                b += (dbinc * scdiff);
+                a += (dainc * scdiff);
+                z += (dzinc * scdiff);
+                s += (dsinc * scdiff);
+                t += (dtinc * scdiff);
+                w += (dwinc * scdiff);
+            }
 
-        for (j = 0; j <= length; j++)
-        {
-            sz = (z >> 10) & 0x3fffff;
+            for (j = 0; j <= length; j++) {
+                sz = (z >> 10) & 0x3fffff;
 
-            if (!j)
-            {
+                if (!j) {
+                    sr = r >> 14;
+                    sg = g >> 14;
+                    sb = b >> 14;
+                    sa = a >> 14;
+                    ss = s >> 16;
+                    st = t >> 16;
+                    sw = w >> 16;
+
+                    wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
+
+                    tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2,
+                                 &wstate->lod_frac);
+
+                    texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
+                    texture_pipeline_cycle(wstate, &wstate->texel1_color, &wstate->texel0_color, sss, sst, tile2, 1);
+
+                    lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+
+                    rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+
+                    if (wstate->other_modes.f.getditherlevel < 2)
+                        get_dither_noise(wstate, x, i, &cdith, &adith);
+
+                    combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
+                }
+
+                z_correct(wstate, offx, offy, &sz, curpixel_cvg);
+
+                combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
+
+                wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
+
+                wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg,
+                                curpixel_memcvg);
+
+                if (wen)
+                    wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
+
+                if (!wen && i >= wstate->last_overwriting_scanline)
+                    blender_2cycle_cycle0_gval(wstate, curpixel);
+
+                wstate->memory_color = wstate->pre_memory_color;
+
+                x += xinc;
+
+                r += drinc;
+                g += dginc;
+                b += dbinc;
+                a += dainc;
+                s += dsinc;
+                t += dtinc;
+                w += dwinc;
+
                 sr = r >> 14;
                 sg = g >> 14;
                 sb = b >> 14;
@@ -1299,94 +1237,44 @@ static void render_spans_2cycle_notexelnext(struct rdp_state* wstate, int start,
                 st = t >> 16;
                 sw = w >> 16;
 
+                lookup_cvmask_derivatives(j < length ? wstate->cvgbuf[x] : 0, &offx, &offy, &nextpixel_cvg,
+                                          &curpixel_cvbit);
+
+                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, nextpixel_cvg);
+
                 wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
 
-                tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2, &wstate->lod_frac);
+                tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2,
+                             &wstate->lod_frac);
 
                 texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
                 texture_pipeline_cycle(wstate, &wstate->texel1_color, &wstate->texel0_color, sss, sst, tile2, 1);
 
-                lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+                combiner_2cycle_cycle0(wstate, adith, nextpixel_cvg, &acalpha);
 
-                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+                if (wen)
+                    wen = alpha_compare(wstate, acalpha);
+
+                if (wen) {
+                    blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
+                    wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
+                                        &delayedhbwidx);
+                    if (wstate->other_modes.z_update_en)
+                        z_store(zbcur, sz, dzpixenc);
+                } else if (i >= wstate->last_overwriting_scanline)
+                    rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
+                                            flip, &delayedhbwidx);
 
                 if (wstate->other_modes.f.getditherlevel < 2)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
-                combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
+                curpixel_cvg = nextpixel_cvg;
+
+                z += dzinc;
+
+                curpixel += xinc;
+                zbcur += xinc;
             }
-
-            z_correct(wstate, offx, offy, &sz, curpixel_cvg);
-
-            combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
-
-            wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
-
-            wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg, curpixel_memcvg);
-
-            if (wen)
-                wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
-
-            if (!wen && i >= wstate->last_overwriting_scanline)
-                blender_2cycle_cycle0_gval(wstate, curpixel);
-
-            wstate->memory_color = wstate->pre_memory_color;
-
-            x += xinc;
-
-            r += drinc;
-            g += dginc;
-            b += dbinc;
-            a += dainc;
-            s += dsinc;
-            t += dtinc;
-            w += dwinc;
-
-            sr = r >> 14;
-            sg = g >> 14;
-            sb = b >> 14;
-            sa = a >> 14;
-            ss = s >> 16;
-            st = t >> 16;
-            sw = w >> 16;
-
-            lookup_cvmask_derivatives(j < length ? wstate->cvgbuf[x] : 0, &offx, &offy, &nextpixel_cvg, &curpixel_cvbit);
-
-            rgba_correct(wstate, offx, offy, sr, sg, sb, sa, nextpixel_cvg);
-
-            wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
-
-            tclod_2cycle(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1, &tile2, &wstate->lod_frac);
-
-            texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
-            texture_pipeline_cycle(wstate, &wstate->texel1_color, &wstate->texel0_color, sss, sst, tile2, 1);
-
-            combiner_2cycle_cycle0(wstate, adith, nextpixel_cvg, &acalpha);
-
-            if (wen)
-                wen = alpha_compare(wstate, acalpha);
-
-            if (wen)
-            {
-                blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
-                wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
-                if (wstate->other_modes.z_update_en)
-                    z_store(zbcur, sz, dzpixenc);
-            }
-            else if (i >= wstate->last_overwriting_scanline)
-                rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
-
-
-            if (wstate->other_modes.f.getditherlevel < 2)
-                get_dither_noise(wstate, x, i, &cdith, &adith);
-
-            curpixel_cvg = nextpixel_cvg;
-
-            z += dzinc;
-
-            curpixel += xinc;
-            zbcur += xinc;
-        }
         }
     }
 
@@ -1394,8 +1282,8 @@ static void render_spans_2cycle_notexelnext(struct rdp_state* wstate, int start,
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
 
-
-static void render_spans_2cycle_notexel1(struct rdp_state* wstate, int start, int end, int tilenum, int flip)
+static void
+render_spans_2cycle_notexel1(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
     int zb = wstate->zb_address >> 1;
     int zbcur;
@@ -1414,8 +1302,7 @@ static void render_spans_2cycle_notexel1(struct rdp_state* wstate, int start, in
 
     int drinc, dginc, dbinc, dainc, dzinc, dsinc, dtinc, dwinc;
     int xinc;
-    if (flip)
-    {
+    if (flip) {
         drinc = wstate->spans_dr;
         dginc = wstate->spans_dg;
         dbinc = wstate->spans_db;
@@ -1425,9 +1312,7 @@ static void render_spans_2cycle_notexel1(struct rdp_state* wstate, int start, in
         dtinc = wstate->spans_dt;
         dwinc = wstate->spans_dw;
         xinc = 1;
-    }
-    else
-    {
+    } else {
         drinc = -wstate->spans_dr;
         dginc = -wstate->spans_dg;
         dbinc = -wstate->spans_db;
@@ -1442,8 +1327,7 @@ static void render_spans_2cycle_notexel1(struct rdp_state* wstate, int start, in
     int dzpix;
     if (!wstate->other_modes.z_source_sel)
         dzpix = wstate->spans_dzpix;
-    else
-    {
+    else {
         dzpix = wstate->primitive_delta_z;
         dzinc = wstate->spans_cdz = wstate->spans_dzdy = 0;
     }
@@ -1462,59 +1346,102 @@ static void render_spans_2cycle_notexel1(struct rdp_state* wstate, int start, in
     uint32_t fir, fig, fib;
     int delayedhbwidx = -1;
 
-    for (i = start; i <= end; i++)
-    {
-        if (wstate->span[i].validline)
-        {
+    for (i = start; i <= end; i++) {
+        if (wstate->span[i].validline) {
 
-        xstart = wstate->span[i].lx;
-        xend = wstate->span[i].unscrx;
-        xendsc = wstate->span[i].rx;
-        r = wstate->span[i].r;
-        g = wstate->span[i].g;
-        b = wstate->span[i].b;
-        a = wstate->span[i].a;
-        z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
-        s = wstate->span[i].s;
-        t = wstate->span[i].t;
-        w = wstate->span[i].w;
+            xstart = wstate->span[i].lx;
+            xend = wstate->span[i].unscrx;
+            xendsc = wstate->span[i].rx;
+            r = wstate->span[i].r;
+            g = wstate->span[i].g;
+            b = wstate->span[i].b;
+            a = wstate->span[i].a;
+            z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
+            s = wstate->span[i].s;
+            t = wstate->span[i].t;
+            w = wstate->span[i].w;
 
-        x = xendsc;
-        curpixel = wstate->fb_width * i + x;
-        zbcur = zb + curpixel;
+            x = xendsc;
+            curpixel = wstate->fb_width * i + x;
+            zbcur = zb + curpixel;
 
-        if (!flip)
-        {
-            length = xendsc - xstart;
-            scdiff = xend - xendsc;
-            compute_cvg_noflip(wstate, i);
-        }
-        else
-        {
-            length = xstart - xendsc;
-            scdiff = xendsc - xend;
-            compute_cvg_flip(wstate, i);
-        }
+            if (!flip) {
+                length = xendsc - xstart;
+                scdiff = xend - xendsc;
+                compute_cvg_noflip(wstate, i);
+            } else {
+                length = xstart - xendsc;
+                scdiff = xendsc - xend;
+                compute_cvg_flip(wstate, i);
+            }
 
-        if (scdiff)
-        {
-            scdiff &= 0xfff;
-            r += (drinc * scdiff);
-            g += (dginc * scdiff);
-            b += (dbinc * scdiff);
-            a += (dainc * scdiff);
-            z += (dzinc * scdiff);
-            s += (dsinc * scdiff);
-            t += (dtinc * scdiff);
-            w += (dwinc * scdiff);
-        }
+            if (scdiff) {
+                scdiff &= 0xfff;
+                r += (drinc * scdiff);
+                g += (dginc * scdiff);
+                b += (dbinc * scdiff);
+                a += (dainc * scdiff);
+                z += (dzinc * scdiff);
+                s += (dsinc * scdiff);
+                t += (dtinc * scdiff);
+                w += (dwinc * scdiff);
+            }
 
-        for (j = 0; j <= length; j++)
-        {
-            sz = (z >> 10) & 0x3fffff;
+            for (j = 0; j <= length; j++) {
+                sz = (z >> 10) & 0x3fffff;
 
-            if (!j)
-            {
+                if (!j) {
+                    sr = r >> 14;
+                    sg = g >> 14;
+                    sb = b >> 14;
+                    sa = a >> 14;
+                    ss = s >> 16;
+                    st = t >> 16;
+                    sw = w >> 16;
+
+                    wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
+
+                    tclod_2cycle_notexel1(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1);
+
+                    texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
+
+                    lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+
+                    rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+
+                    if (wstate->other_modes.f.getditherlevel < 2)
+                        get_dither_noise(wstate, x, i, &cdith, &adith);
+
+                    combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
+                }
+
+                z_correct(wstate, offx, offy, &sz, curpixel_cvg);
+
+                combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
+
+                wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
+
+                wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg,
+                                curpixel_memcvg);
+
+                if (wen)
+                    wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
+
+                if (!wen && i >= wstate->last_overwriting_scanline)
+                    blender_2cycle_cycle0_gval(wstate, curpixel);
+
+                wstate->memory_color = wstate->pre_memory_color;
+
+                x += xinc;
+
+                r += drinc;
+                g += dginc;
+                b += dbinc;
+                a += dainc;
+                s += dsinc;
+                t += dtinc;
+                w += dwinc;
+
                 sr = r >> 14;
                 sg = g >> 14;
                 sb = b >> 14;
@@ -1523,91 +1450,42 @@ static void render_spans_2cycle_notexel1(struct rdp_state* wstate, int start, in
                 st = t >> 16;
                 sw = w >> 16;
 
+                lookup_cvmask_derivatives(j < length ? wstate->cvgbuf[x] : 0, &offx, &offy, &nextpixel_cvg,
+                                          &curpixel_cvbit);
+
+                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, nextpixel_cvg);
+
                 wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
 
                 tclod_2cycle_notexel1(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1);
 
                 texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
 
-                lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+                combiner_2cycle_cycle0(wstate, adith, nextpixel_cvg, &acalpha);
 
-                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+                if (wen)
+                    wen = alpha_compare(wstate, acalpha);
+
+                if (wen) {
+                    blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
+                    wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
+                                        &delayedhbwidx);
+                    if (wstate->other_modes.z_update_en)
+                        z_store(zbcur, sz, dzpixenc);
+                } else if (i >= wstate->last_overwriting_scanline)
+                    rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
+                                            flip, &delayedhbwidx);
 
                 if (wstate->other_modes.f.getditherlevel < 2)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
-                combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
+                curpixel_cvg = nextpixel_cvg;
+
+                z += dzinc;
+
+                curpixel += xinc;
+                zbcur += xinc;
             }
-
-            z_correct(wstate, offx, offy, &sz, curpixel_cvg);
-
-            combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
-
-            wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
-
-            wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg, curpixel_memcvg);
-
-            if (wen)
-                wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
-
-            if (!wen && i >= wstate->last_overwriting_scanline)
-                blender_2cycle_cycle0_gval(wstate, curpixel);
-
-            wstate->memory_color = wstate->pre_memory_color;
-
-            x += xinc;
-
-            r += drinc;
-            g += dginc;
-            b += dbinc;
-            a += dainc;
-            s += dsinc;
-            t += dtinc;
-            w += dwinc;
-
-            sr = r >> 14;
-            sg = g >> 14;
-            sb = b >> 14;
-            sa = a >> 14;
-            ss = s >> 16;
-            st = t >> 16;
-            sw = w >> 16;
-
-            lookup_cvmask_derivatives(j < length ? wstate->cvgbuf[x] : 0, &offx, &offy, &nextpixel_cvg, &curpixel_cvbit);
-
-            rgba_correct(wstate, offx, offy, sr, sg, sb, sa, nextpixel_cvg);
-
-            wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
-
-            tclod_2cycle_notexel1(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1);
-
-            texture_pipeline_cycle(wstate, &wstate->texel0_color, &wstate->texel0_color, sss, sst, tile1, 0);
-
-            combiner_2cycle_cycle0(wstate, adith, nextpixel_cvg, &acalpha);
-
-            if (wen)
-                wen = alpha_compare(wstate, acalpha);
-
-            if (wen)
-            {
-                blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
-                wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
-                if (wstate->other_modes.z_update_en)
-                    z_store(zbcur, sz, dzpixenc);
-            }
-            else if (i >= wstate->last_overwriting_scanline)
-                rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
-
-            if (wstate->other_modes.f.getditherlevel < 2)
-                get_dither_noise(wstate, x, i, &cdith, &adith);
-
-            curpixel_cvg = nextpixel_cvg;
-
-            z += dzinc;
-
-            curpixel += xinc;
-            zbcur += xinc;
-        }
         }
     }
 
@@ -1615,8 +1493,8 @@ static void render_spans_2cycle_notexel1(struct rdp_state* wstate, int start, in
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
 
-
-static void render_spans_2cycle_notex(struct rdp_state* wstate, int start, int end, int tilenum, int flip)
+static void
+render_spans_2cycle_notex(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
     UNUSED(tilenum);
 
@@ -1634,17 +1512,14 @@ static void render_spans_2cycle_notex(struct rdp_state* wstate, int start, int e
 
     int drinc, dginc, dbinc, dainc, dzinc;
     int xinc;
-    if (flip)
-    {
+    if (flip) {
         drinc = wstate->spans_dr;
         dginc = wstate->spans_dg;
         dbinc = wstate->spans_db;
         dainc = wstate->spans_da;
         dzinc = wstate->spans_dz;
         xinc = 1;
-    }
-    else
-    {
+    } else {
         drinc = -wstate->spans_dr;
         dginc = -wstate->spans_dg;
         dbinc = -wstate->spans_db;
@@ -1656,8 +1531,7 @@ static void render_spans_2cycle_notex(struct rdp_state* wstate, int start, int e
     int dzpix;
     if (!wstate->other_modes.z_source_sel)
         dzpix = wstate->spans_dzpix;
-    else
-    {
+    else {
         dzpix = wstate->primitive_delta_z;
         dzinc = wstate->spans_cdz = wstate->spans_dzdy = 0;
     }
@@ -1675,126 +1549,119 @@ static void render_spans_2cycle_notex(struct rdp_state* wstate, int start, int e
     uint32_t fir, fig, fib;
     int delayedhbwidx = -1;
 
-    for (i = start; i <= end; i++)
-    {
-        if (wstate->span[i].validline)
-        {
+    for (i = start; i <= end; i++) {
+        if (wstate->span[i].validline) {
 
-        xstart = wstate->span[i].lx;
-        xend = wstate->span[i].unscrx;
-        xendsc = wstate->span[i].rx;
-        r = wstate->span[i].r;
-        g = wstate->span[i].g;
-        b = wstate->span[i].b;
-        a = wstate->span[i].a;
-        z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
+            xstart = wstate->span[i].lx;
+            xend = wstate->span[i].unscrx;
+            xendsc = wstate->span[i].rx;
+            r = wstate->span[i].r;
+            g = wstate->span[i].g;
+            b = wstate->span[i].b;
+            a = wstate->span[i].a;
+            z = wstate->other_modes.z_source_sel ? wstate->primitive_z : wstate->span[i].z;
 
-        x = xendsc;
-        curpixel = wstate->fb_width * i + x;
-        zbcur = zb + curpixel;
+            x = xendsc;
+            curpixel = wstate->fb_width * i + x;
+            zbcur = zb + curpixel;
 
-        if (!flip)
-        {
-            length = xendsc - xstart;
-            scdiff = xend - xendsc;
-            compute_cvg_noflip(wstate, i);
-        }
-        else
-        {
-            length = xstart - xendsc;
-            scdiff = xendsc - xend;
-            compute_cvg_flip(wstate, i);
-        }
+            if (!flip) {
+                length = xendsc - xstart;
+                scdiff = xend - xendsc;
+                compute_cvg_noflip(wstate, i);
+            } else {
+                length = xstart - xendsc;
+                scdiff = xendsc - xend;
+                compute_cvg_flip(wstate, i);
+            }
 
-        if (scdiff)
-        {
-            scdiff &= 0xfff;
-            r += (drinc * scdiff);
-            g += (dginc * scdiff);
-            b += (dbinc * scdiff);
-            a += (dainc * scdiff);
-            z += (dzinc * scdiff);
-        }
+            if (scdiff) {
+                scdiff &= 0xfff;
+                r += (drinc * scdiff);
+                g += (dginc * scdiff);
+                b += (dbinc * scdiff);
+                a += (dainc * scdiff);
+                z += (dzinc * scdiff);
+            }
 
-        for (j = 0; j <= length; j++)
-        {
-            sz = (z >> 10) & 0x3fffff;
+            for (j = 0; j <= length; j++) {
+                sz = (z >> 10) & 0x3fffff;
 
-            if (!j)
-            {
+                if (!j) {
+                    sr = r >> 14;
+                    sg = g >> 14;
+                    sb = b >> 14;
+                    sa = a >> 14;
+
+                    lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+
+                    rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+
+                    if (wstate->other_modes.f.getditherlevel < 2)
+                        get_dither_noise(wstate, x, i, &cdith, &adith);
+
+                    combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
+                }
+
+                z_correct(wstate, offx, offy, &sz, curpixel_cvg);
+
+                combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
+
+                wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
+
+                wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg,
+                                curpixel_memcvg);
+
+                if (wen)
+                    wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
+
+                if (!wen && i >= wstate->last_overwriting_scanline)
+                    blender_2cycle_cycle0_gval(wstate, curpixel);
+
+                wstate->memory_color = wstate->pre_memory_color;
+
+                x += xinc;
+
+                r += drinc;
+                g += dginc;
+                b += dbinc;
+                a += dainc;
+
                 sr = r >> 14;
                 sg = g >> 14;
                 sb = b >> 14;
                 sa = a >> 14;
 
-                lookup_cvmask_derivatives(wstate->cvgbuf[x], &offx, &offy, &curpixel_cvg, &curpixel_cvbit);
+                lookup_cvmask_derivatives(j < length ? wstate->cvgbuf[x] : 0, &offx, &offy, &nextpixel_cvg,
+                                          &curpixel_cvbit);
 
-                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, curpixel_cvg);
+                rgba_correct(wstate, offx, offy, sr, sg, sb, sa, nextpixel_cvg);
+
+                combiner_2cycle_cycle0(wstate, adith, nextpixel_cvg, &acalpha);
+
+                if (wen)
+                    wen = alpha_compare(wstate, acalpha);
+
+                if (wen) {
+                    blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
+                    wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
+                                        &delayedhbwidx);
+                    if (wstate->other_modes.z_update_en)
+                        z_store(zbcur, sz, dzpixenc);
+                } else if (i >= wstate->last_overwriting_scanline)
+                    rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg,
+                                            flip, &delayedhbwidx);
 
                 if (wstate->other_modes.f.getditherlevel < 2)
                     get_dither_noise(wstate, x, i, &cdith, &adith);
 
-                combiner_2cycle_cycle0(wstate, adith, curpixel_cvg, &acalpha);
+                curpixel_cvg = nextpixel_cvg;
+
+                z += dzinc;
+
+                curpixel += xinc;
+                zbcur += xinc;
             }
-
-            z_correct(wstate, offx, offy, &sz, curpixel_cvg);
-
-            combiner_2cycle_cycle1(wstate, adith, &curpixel_cvg);
-
-            wstate->fbread2_ptr(wstate, curpixel, &curpixel_memcvg);
-
-            wen = z_compare(wstate, zbcur, sz, (uint16_t)dzpix, dzpixenc, &blend_en, &prewrap, &curpixel_cvg, curpixel_memcvg);
-
-            if (wen)
-                wen = blender_2cycle_cycle0(wstate, curpixel_cvg, curpixel_cvbit);
-
-            if (!wen && i >= wstate->last_overwriting_scanline)
-                blender_2cycle_cycle0_gval(wstate, curpixel);
-
-            wstate->memory_color = wstate->pre_memory_color;
-
-            x += xinc;
-
-            r += drinc;
-            g += dginc;
-            b += dbinc;
-            a += dainc;
-
-            sr = r >> 14;
-            sg = g >> 14;
-            sb = b >> 14;
-            sa = a >> 14;
-
-            lookup_cvmask_derivatives(j < length ? wstate->cvgbuf[x] : 0, &offx, &offy, &nextpixel_cvg, &curpixel_cvbit);
-
-            rgba_correct(wstate, offx, offy, sr, sg, sb, sa, nextpixel_cvg);
-
-            combiner_2cycle_cycle0(wstate, adith, nextpixel_cvg, &acalpha);
-
-            if (wen)
-                wen = alpha_compare(wstate, acalpha);
-
-            if (wen)
-            {
-                blender_2cycle_cycle1(wstate, &fir, &fig, &fib, cdith, blend_en, prewrap);
-                wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
-                if (wstate->other_modes.z_update_en)
-                    z_store(zbcur, sz, dzpixenc);
-            }
-            else if (i >= wstate->last_overwriting_scanline)
-                rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg, flip, &delayedhbwidx);
-
-
-            if (wstate->other_modes.f.getditherlevel < 2)
-                get_dither_noise(wstate, x, i, &cdith, &adith);
-
-            curpixel_cvg = nextpixel_cvg;
-
-            z += dzinc;
-
-            curpixel += xinc;
-            zbcur += xinc;
-        }
         }
     }
 
@@ -1802,11 +1669,10 @@ static void render_spans_2cycle_notex(struct rdp_state* wstate, int start, int e
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
 
-
-static void render_spans_fill(struct rdp_state* wstate, int start, int end, int flip)
+static void
+render_spans_fill(struct rdp_state *wstate, int start, int end, int flip)
 {
-    if (wstate->fb_size == PIXEL_SIZE_4BIT)
-    {
+    if (wstate->fb_size == PIXEL_SIZE_4BIT) {
         rdp_pipeline_crashed = 1;
         return;
     }
@@ -1824,8 +1690,7 @@ static void render_spans_fill(struct rdp_state* wstate, int start, int end, int 
     int x, length;
     int delayedhbwidx = -1;
 
-    for (i = start; i <= end; i++)
-    {
+    for (i = start; i <= end; i++) {
         prevxstart = xstart;
         xstart = wstate->span[i].lx;
         xendsc = wstate->span[i].rx;
@@ -1834,37 +1699,30 @@ static void render_spans_fill(struct rdp_state* wstate, int start, int end, int 
         curpixel = wstate->fb_width * i + x;
         length = flip ? (xstart - xendsc) : (xendsc - xstart);
 
-        if (wstate->span[i].validline)
-        {
-            if (fastkillbits && length >= 0)
-            {
+        if (wstate->span[i].validline) {
+            if (fastkillbits && length >= 0) {
                 if (!onetimewarnings.fillmbitcrashes)
                     msg_warning("render_spans_fill: image_read_en %x z_update_en %x z_compare_en %x. RDP crashed",
-                    wstate->other_modes.image_read_en, wstate->other_modes.z_update_en, wstate->other_modes.z_compare_en);
+                                wstate->other_modes.image_read_en, wstate->other_modes.z_update_en,
+                                wstate->other_modes.z_compare_en);
                 onetimewarnings.fillmbitcrashes = true;
                 rdp_pipeline_crashed = 1;
                 return;
             }
 
-
-
-
-
-
-
-            for (j = 0; j <= length; j++)
-            {
+            for (j = 0; j <= length; j++) {
                 wstate->fbfill_ptr(wstate, curpixel, flip, &delayedhbwidx);
 
                 x += xinc;
                 curpixel += xinc;
             }
 
-            if (slowkillbits && length >= 0)
-            {
+            if (slowkillbits && length >= 0) {
                 if (!onetimewarnings.fillmbitcrashes)
-                    msg_warning("render_spans_fill: image_read_en %x z_update_en %x z_compare_en %x z_source_sel %x. RDP crashed",
-                    wstate->other_modes.image_read_en, wstate->other_modes.z_update_en, wstate->other_modes.z_compare_en, wstate->other_modes.z_source_sel);
+                    msg_warning("render_spans_fill: image_read_en %x z_update_en %x z_compare_en %x z_source_sel %x. "
+                                "RDP crashed",
+                                wstate->other_modes.image_read_en, wstate->other_modes.z_update_en,
+                                wstate->other_modes.z_compare_en, wstate->other_modes.z_source_sel);
                 onetimewarnings.fillmbitcrashes = 1;
                 rdp_pipeline_crashed = 1;
                 return;
@@ -1876,12 +1734,12 @@ static void render_spans_fill(struct rdp_state* wstate, int start, int end, int 
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
 
-static void render_spans_copy(struct rdp_state* wstate, int start, int end, int tilenum, int flip)
+static void
+render_spans_copy(struct rdp_state *wstate, int start, int end, int tilenum, int flip)
 {
     int i, j, k;
 
-    if (wstate->fb_size == PIXEL_SIZE_32BIT)
-    {
+    if (wstate->fb_size == PIXEL_SIZE_32BIT) {
         rdp_pipeline_crashed = 1;
         return;
     }
@@ -1891,15 +1749,12 @@ static void render_spans_copy(struct rdp_state* wstate, int start, int end, int 
 
     int dsinc, dtinc, dwinc;
     int xinc;
-    if (flip)
-    {
+    if (flip) {
         dsinc = wstate->spans_ds;
         dtinc = wstate->spans_dt;
         dwinc = wstate->spans_dw;
         xinc = 1;
-    }
-    else
-    {
+    } else {
         dsinc = -wstate->spans_ds;
         dtinc = -wstate->spans_dt;
         dwinc = -wstate->spans_dw;
@@ -1907,12 +1762,12 @@ static void render_spans_copy(struct rdp_state* wstate, int start, int end, int 
     }
 
     int xstart = 0, xendsc;
-    int s = 0, t = 0, w = 0, ss = 0, st = 0, sw = 0, sss = 0, sst = 0/*, ssw = 0*/;
+    int s = 0, t = 0, w = 0, ss = 0, st = 0, sw = 0, sss = 0, sst = 0 /*, ssw = 0*/;
     int fb_index, length;
-    //int diff = 0;
+    // int diff = 0;
 
     uint32_t hidword = 0, lowdword = 0;
-    //uint32_t hidword1 = 0, lowdword1 = 0;
+    // uint32_t hidword1 = 0, lowdword1 = 0;
     int fbadvance = (wstate->fb_size == PIXEL_SIZE_4BIT) ? 8 : 16 >> wstate->fb_size;
     uint32_t fbptr = 0;
     int fbptr_advance = flip ? 8 : -8;
@@ -1927,106 +1782,88 @@ static void render_spans_copy(struct rdp_state* wstate, int start, int end, int 
 
 #define PIXELS_TO_BYTES_SPECIAL4(pix, siz) ((siz) ? PIXELS_TO_BYTES(pix, siz) : (pix))
 
-    for (i = start; i <= end; i++)
-    {
-        if (wstate->span[i].validline)
-        {
+    for (i = start; i <= end; i++) {
+        if (wstate->span[i].validline) {
 
-        s = wstate->span[i].s;
-        t = wstate->span[i].t;
-        w = wstate->span[i].w;
+            s = wstate->span[i].s;
+            t = wstate->span[i].t;
+            w = wstate->span[i].w;
 
-        xstart = wstate->span[i].lx;
-        xendsc = wstate->span[i].rx;
+            xstart = wstate->span[i].lx;
+            xendsc = wstate->span[i].rx;
 
-        fb_index = wstate->fb_width * i + xendsc;
-        fbptr = wstate->fb_address + PIXELS_TO_BYTES_SPECIAL4(fb_index, wstate->fb_size);
-        fbendptr = wstate->fb_address + PIXELS_TO_BYTES_SPECIAL4((wstate->fb_width * i + xstart), wstate->fb_size);
-        length = flip ? (xstart - xendsc) : (xendsc - xstart);
+            fb_index = wstate->fb_width * i + xendsc;
+            fbptr = wstate->fb_address + PIXELS_TO_BYTES_SPECIAL4(fb_index, wstate->fb_size);
+            fbendptr = wstate->fb_address + PIXELS_TO_BYTES_SPECIAL4((wstate->fb_width * i + xstart), wstate->fb_size);
+            length = flip ? (xstart - xendsc) : (xendsc - xstart);
 
+            for (j = 0; j <= length; j += fbadvance) {
+                ss = s >> 16;
+                st = t >> 16;
+                sw = w >> 16;
 
+                wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
 
+                tclod_copy(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1);
 
-        for (j = 0; j <= length; j += fbadvance)
-        {
-            ss = s >> 16;
-            st = t >> 16;
-            sw = w >> 16;
+                fetch_qword_copy(wstate, &hidword, &lowdword, sss, sst, tile1);
 
-            wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
-
-            tclod_copy(wstate, &sss, &sst, s, t, w, dsinc, dtinc, dwinc, prim_tile, &tile1);
-
-
-
-            fetch_qword_copy(wstate, &hidword, &lowdword, sss, sst, tile1);
-
-
-
-            if (wstate->fb_size == PIXEL_SIZE_16BIT || wstate->fb_size == PIXEL_SIZE_8BIT)
-                copyqword = ((uint64_t)hidword << 32) | ((uint64_t)lowdword);
-            else
-                copyqword = 0;
-
-
-            if (!wstate->other_modes.alpha_compare_en)
-                alphamask = 0xff;
-            else if (wstate->fb_size == PIXEL_SIZE_16BIT)
-            {
-                alphamask = 0;
-                alphamask |= (((copyqword >> 48) & 1) ? 0xC0 : 0);
-                alphamask |= (((copyqword >> 32) & 1) ? 0x30 : 0);
-                alphamask |= (((copyqword >> 16) & 1) ? 0xC : 0);
-                alphamask |= ((copyqword & 1) ? 0x3 : 0);
-            }
-            else if (wstate->fb_size == PIXEL_SIZE_8BIT)
-            {
-                alphamask = 0;
-                threshold = (wstate->other_modes.dither_alpha_en) ? (irand(&wstate->rseed) & 0xff) : wstate->blend_color.a;
-                if (wstate->other_modes.dither_alpha_en)
-                {
-                    currthreshold = threshold;
-                    alphamask |= (((copyqword >> 24) & 0xff) >= currthreshold ? 0xC0 : 0);
-                    currthreshold = ((threshold & 3) << 6) | (threshold >> 2);
-                    alphamask |= (((copyqword >> 16) & 0xff) >= currthreshold ? 0x30 : 0);
-                    currthreshold = ((threshold & 0xf) << 4) | (threshold >> 4);
-                    alphamask |= (((copyqword >> 8) & 0xff) >= currthreshold ? 0xC : 0);
-                    currthreshold = ((threshold & 0x3f) << 2) | (threshold >> 6);
-                    alphamask |= ((copyqword & 0xff) >= currthreshold ? 0x3 : 0);
-                }
+                if (wstate->fb_size == PIXEL_SIZE_16BIT || wstate->fb_size == PIXEL_SIZE_8BIT)
+                    copyqword = ((uint64_t)hidword << 32) | ((uint64_t)lowdword);
                 else
-                {
-                    alphamask |= (((copyqword >> 24) & 0xff) >= threshold ? 0xC0 : 0);
-                    alphamask |= (((copyqword >> 16) & 0xff) >= threshold ? 0x30 : 0);
-                    alphamask |= (((copyqword >> 8) & 0xff) >= threshold ? 0xC : 0);
-                    alphamask |= ((copyqword & 0xff) >= threshold ? 0x3 : 0);
+                    copyqword = 0;
+
+                if (!wstate->other_modes.alpha_compare_en)
+                    alphamask = 0xff;
+                else if (wstate->fb_size == PIXEL_SIZE_16BIT) {
+                    alphamask = 0;
+                    alphamask |= (((copyqword >> 48) & 1) ? 0xC0 : 0);
+                    alphamask |= (((copyqword >> 32) & 1) ? 0x30 : 0);
+                    alphamask |= (((copyqword >> 16) & 1) ? 0xC : 0);
+                    alphamask |= ((copyqword & 1) ? 0x3 : 0);
+                } else if (wstate->fb_size == PIXEL_SIZE_8BIT) {
+                    alphamask = 0;
+                    threshold =
+                        (wstate->other_modes.dither_alpha_en) ? (irand(&wstate->rseed) & 0xff) : wstate->blend_color.a;
+                    if (wstate->other_modes.dither_alpha_en) {
+                        currthreshold = threshold;
+                        alphamask |= (((copyqword >> 24) & 0xff) >= currthreshold ? 0xC0 : 0);
+                        currthreshold = ((threshold & 3) << 6) | (threshold >> 2);
+                        alphamask |= (((copyqword >> 16) & 0xff) >= currthreshold ? 0x30 : 0);
+                        currthreshold = ((threshold & 0xf) << 4) | (threshold >> 4);
+                        alphamask |= (((copyqword >> 8) & 0xff) >= currthreshold ? 0xC : 0);
+                        currthreshold = ((threshold & 0x3f) << 2) | (threshold >> 6);
+                        alphamask |= ((copyqword & 0xff) >= currthreshold ? 0x3 : 0);
+                    } else {
+                        alphamask |= (((copyqword >> 24) & 0xff) >= threshold ? 0xC0 : 0);
+                        alphamask |= (((copyqword >> 16) & 0xff) >= threshold ? 0x30 : 0);
+                        alphamask |= (((copyqword >> 8) & 0xff) >= threshold ? 0xC : 0);
+                        alphamask |= ((copyqword & 0xff) >= threshold ? 0x3 : 0);
+                    }
+                } else
+                    alphamask = 0;
+
+                copywmask = (flip) ? (fbendptr - fbptr + bytesperpixel) : (fbptr - fbendptr + bytesperpixel);
+
+                if (copywmask > 8)
+                    copywmask = 8;
+                tempdword = fbptr;
+                k = 7;
+                while (copywmask > 0) {
+                    tempbyte = (uint8_t)((copyqword >> (k << 3)) & 0xff);
+                    if (alphamask & (1 << k))
+                        rdram_write_pair8(tempdword, tempbyte, flip, &delayedhbwidx);
+
+                    k--;
+                    tempdword += xinc;
+                    copywmask--;
                 }
+
+                s += dsinc;
+                t += dtinc;
+                w += dwinc;
+                fbptr += fbptr_advance;
             }
-            else
-                alphamask = 0;
-
-            copywmask = (flip) ? (fbendptr - fbptr + bytesperpixel) : (fbptr - fbendptr + bytesperpixel);
-
-            if (copywmask > 8)
-                copywmask = 8;
-            tempdword = fbptr;
-            k = 7;
-            while(copywmask > 0)
-            {
-                tempbyte = (uint8_t)((copyqword >> (k << 3)) & 0xff);
-                if (alphamask & (1 << k))
-                    rdram_write_pair8(tempdword, tempbyte, flip, &delayedhbwidx);
-
-                k--;
-                tempdword += xinc;
-                copywmask--;
-            }
-
-            s += dsinc;
-            t += dtinc;
-            w += dwinc;
-            fbptr += fbptr_advance;
-        }
         }
     }
 
@@ -2034,12 +1871,13 @@ static void render_spans_copy(struct rdp_state* wstate, int start, int end, int 
         rdram_complete_delayed_hbwrites(delayedhbwidx);
 }
 
-static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
+static void
+edgewalker_for_prims(struct rdp_state *wstate, int32_t *ewdata)
 {
     int j = 0;
     int xleft = 0, xright = 0, xleft_inc = 0, xright_inc = 0;
     int r = 0, g = 0, b = 0, a = 0, z = 0, s = 0, t = 0, w = 0;
-    //int dr = 0, dg = 0, db = 0, da = 0;
+    // int dr = 0, dg = 0, db = 0, da = 0;
     int drdx = 0, dgdx = 0, dbdx = 0, dadx = 0, dzdx = 0, dsdx = 0, dtdx = 0, dwdx = 0;
     int drdy = 0, dgdy = 0, dbdy = 0, dady = 0, dzdy = 0, dsdy = 0, dtdy = 0, dwdy = 0;
     int drde = 0, dgde = 0, dbde = 0, dade = 0, dzde = 0, dsde = 0, dtde = 0, dwde = 0;
@@ -2048,14 +1886,12 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
     int32_t xl = 0, xm = 0, xh = 0;
     int32_t dxldy = 0, dxhdy = 0, dxmdy = 0;
 
-    if (wstate->other_modes.f.stalederivs)
-    {
+    if (wstate->other_modes.f.stalederivs) {
         deduce_derivatives(wstate);
         wstate->other_modes.f.stalederivs = 0;
     }
 
-    if (wstate->fb_size == PIXEL_SIZE_8BIT)
-    {
+    if (wstate->fb_size == PIXEL_SIZE_8BIT) {
         rdram_hidden_old[0] &= ~2;
         rdram_hidden_old[4] &= ~2;
     }
@@ -2066,7 +1902,6 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
     flip = (ewdata[0] & 0x800000) != 0;
     wstate->max_level = (ewdata[0] >> 19) & 7;
     tilenum = (ewdata[0] >> 16) & 7;
-
 
     yl = SIGN(ewdata[0], 14);
     ym = ewdata[1] >> 16;
@@ -2079,16 +1914,13 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
 
     dxldy = SIGN(ewdata[3], 30);
 
-
-
     dxhdy = SIGN(ewdata[5], 30);
     dxmdy = SIGN(ewdata[7], 30);
 
-
-    r    = (ewdata[8] & 0xffff0000) | ((ewdata[12] >> 16) & 0x0000ffff);
-    g    = ((ewdata[8] << 16) & 0xffff0000) | (ewdata[12] & 0x0000ffff);
-    b    = (ewdata[9] & 0xffff0000) | ((ewdata[13] >> 16) & 0x0000ffff);
-    a    = ((ewdata[9] << 16) & 0xffff0000) | (ewdata[13] & 0x0000ffff);
+    r = (ewdata[8] & 0xffff0000) | ((ewdata[12] >> 16) & 0x0000ffff);
+    g = ((ewdata[8] << 16) & 0xffff0000) | (ewdata[12] & 0x0000ffff);
+    b = (ewdata[9] & 0xffff0000) | ((ewdata[13] >> 16) & 0x0000ffff);
+    a = ((ewdata[9] << 16) & 0xffff0000) | (ewdata[13] & 0x0000ffff);
     drdx = (ewdata[10] & 0xffff0000) | ((ewdata[14] >> 16) & 0x0000ffff);
     dgdx = ((ewdata[10] << 16) & 0xffff0000) | (ewdata[14] & 0x0000ffff);
     dbdx = (ewdata[11] & 0xffff0000) | ((ewdata[15] >> 16) & 0x0000ffff);
@@ -2102,31 +1934,23 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
     dbdy = (ewdata[19] & 0xffff0000) | ((ewdata[23] >> 16) & 0x0000ffff);
     dady = ((ewdata[19] << 16) & 0xffff0000) | (ewdata[23] & 0x0000ffff);
 
-
-    s    = (ewdata[24] & 0xffff0000) | ((ewdata[28] >> 16) & 0x0000ffff);
-    t    = ((ewdata[24] << 16) & 0xffff0000)    | (ewdata[28] & 0x0000ffff);
-    w    = (ewdata[25] & 0xffff0000) | ((ewdata[29] >> 16) & 0x0000ffff);
+    s = (ewdata[24] & 0xffff0000) | ((ewdata[28] >> 16) & 0x0000ffff);
+    t = ((ewdata[24] << 16) & 0xffff0000) | (ewdata[28] & 0x0000ffff);
+    w = (ewdata[25] & 0xffff0000) | ((ewdata[29] >> 16) & 0x0000ffff);
     dsdx = (ewdata[26] & 0xffff0000) | ((ewdata[30] >> 16) & 0x0000ffff);
-    dtdx = ((ewdata[26] << 16) & 0xffff0000)    | (ewdata[30] & 0x0000ffff);
+    dtdx = ((ewdata[26] << 16) & 0xffff0000) | (ewdata[30] & 0x0000ffff);
     dwdx = (ewdata[27] & 0xffff0000) | ((ewdata[31] >> 16) & 0x0000ffff);
     dsde = (ewdata[32] & 0xffff0000) | ((ewdata[36] >> 16) & 0x0000ffff);
-    dtde = ((ewdata[32] << 16) & 0xffff0000)    | (ewdata[36] & 0x0000ffff);
+    dtde = ((ewdata[32] << 16) & 0xffff0000) | (ewdata[36] & 0x0000ffff);
     dwde = (ewdata[33] & 0xffff0000) | ((ewdata[37] >> 16) & 0x0000ffff);
     dsdy = (ewdata[34] & 0xffff0000) | ((ewdata[38] >> 16) & 0x0000ffff);
-    dtdy = ((ewdata[34] << 16) & 0xffff0000)    | (ewdata[38] & 0x0000ffff);
+    dtdy = ((ewdata[34] << 16) & 0xffff0000) | (ewdata[38] & 0x0000ffff);
     dwdy = (ewdata[35] & 0xffff0000) | ((ewdata[39] >> 16) & 0x0000ffff);
 
-
-    z    = ewdata[40];
+    z = ewdata[40];
     dzdx = ewdata[41];
     dzde = ewdata[42];
     dzdy = ewdata[43];
-
-
-
-
-
-
 
     wstate->spans_ds = dsdx & ~0x1f;
     wstate->spans_dt = dtdx & ~0x1f;
@@ -2136,7 +1960,6 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
     wstate->spans_db = dbdx & ~0x1f;
     wstate->spans_da = dadx & ~0x1f;
     wstate->spans_dz = dzdx;
-
 
     wstate->spans_drdy = drdy >> 14;
     wstate->spans_dgdy = dgdy >> 14;
@@ -2163,19 +1986,15 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
     wstate->spans_dtdy = dtdy & ~0x7fff;
     wstate->spans_dwdy = dwdy & ~0x7fff;
 
-
     int dzdy_dz = (dzdy >> 16) & 0xffff;
     int dzdx_dz = (dzdx >> 16) & 0xffff;
 
-    wstate->spans_dzpix = ((dzdy_dz & 0x8000) ? ((~dzdy_dz) & 0x7fff) : dzdy_dz) + ((dzdx_dz & 0x8000) ? ((~dzdx_dz) & 0x7fff) : dzdx_dz);
+    wstate->spans_dzpix =
+        ((dzdy_dz & 0x8000) ? ((~dzdy_dz) & 0x7fff) : dzdy_dz) + ((dzdx_dz & 0x8000) ? ((~dzdx_dz) & 0x7fff) : dzdx_dz);
     wstate->spans_dzpix = normalize_dzpix(wstate->spans_dzpix & 0xffff) & 0xffff;
-
-
 
     xleft_inc = (dxmdy >> 2) & ~0x1;
     xright_inc = (dxhdy >> 2) & ~0x1;
-
-
 
     xright = xh & ~0x1;
     xleft = xm & ~0x1;
@@ -2188,8 +2007,7 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
     int dsdeh, dtdeh, dwdeh, drdeh, dgdeh, dbdeh, dadeh, dzdeh, dsdyh, dtdyh, dwdyh, drdyh, dgdyh, dbdyh, dadyh, dzdyh;
     int do_offset = !(sign_dxhdy ^ flip);
 
-    if (do_offset)
-    {
+    if (do_offset) {
         dsdeh = dsde & ~0x1ff;
         dtdeh = dtde & ~0x1ff;
         dwdeh = dwde & ~0x1ff;
@@ -2208,12 +2026,6 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
         dadyh = dady & ~0x1ff;
         dzdyh = dzdy & ~0x1ff;
 
-
-
-
-
-
-
         dsdiff = dsdeh - (dsdeh >> 2) - dsdyh + (dsdyh >> 2);
         dtdiff = dtdeh - (dtdeh >> 2) - dtdyh + (dtdyh >> 2);
         dwdiff = dwdeh - (dwdeh >> 2) - dwdyh + (dwdyh >> 2);
@@ -2223,15 +2035,13 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
         dadiff = dadeh - (dadeh >> 2) - dadyh + (dadyh >> 2);
         dzdiff = dzdeh - (dzdeh >> 2) - dzdyh + (dzdyh >> 2);
 
-    }
-    else
+    } else
         dsdiff = dtdiff = dwdiff = drdiff = dgdiff = dbdiff = dadiff = dzdiff = 0;
 
     int xfrac = 0;
 
     int dsdxh, dtdxh, dwdxh, drdxh, dgdxh, dbdxh, dadxh, dzdxh;
-    if (wstate->other_modes.cycle_type != CYCLE_TYPE_COPY)
-    {
+    if (wstate->other_modes.cycle_type != CYCLE_TYPE_COPY) {
         dsdxh = (dsdx >> 8) & ~1;
         dtdxh = (dtdx >> 8) & ~1;
         dwdxh = (dwdx >> 8) & ~1;
@@ -2240,45 +2050,40 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
         dbdxh = (dbdx >> 8) & ~1;
         dadxh = (dadx >> 8) & ~1;
         dzdxh = (dzdx >> 8) & ~1;
-    }
-    else
+    } else
         dsdxh = dtdxh = dwdxh = drdxh = dgdxh = dbdxh = dadxh = dzdxh = 0;
 
+#define ADJUST_ATTR_PRIM()                                                      \
+    {                                                                           \
+        wstate->span[j].s = ((s & ~0x1ff) + dsdiff - (xfrac * dsdxh)) & ~0x3ff; \
+        wstate->span[j].t = ((t & ~0x1ff) + dtdiff - (xfrac * dtdxh)) & ~0x3ff; \
+        wstate->span[j].w = ((w & ~0x1ff) + dwdiff - (xfrac * dwdxh)) & ~0x3ff; \
+        wstate->span[j].r = ((r & ~0x1ff) + drdiff - (xfrac * drdxh)) & ~0x3ff; \
+        wstate->span[j].g = ((g & ~0x1ff) + dgdiff - (xfrac * dgdxh)) & ~0x3ff; \
+        wstate->span[j].b = ((b & ~0x1ff) + dbdiff - (xfrac * dbdxh)) & ~0x3ff; \
+        wstate->span[j].a = ((a & ~0x1ff) + dadiff - (xfrac * dadxh)) & ~0x3ff; \
+        wstate->span[j].z = ((z & ~0x1ff) + dzdiff - (xfrac * dzdxh)) & ~0x3ff; \
+    }
 
-
-
-
-#define ADJUST_ATTR_PRIM()      \
-{                           \
-    wstate->span[j].s = ((s & ~0x1ff) + dsdiff - (xfrac * dsdxh)) & ~0x3ff;             \
-    wstate->span[j].t = ((t & ~0x1ff) + dtdiff - (xfrac * dtdxh)) & ~0x3ff;             \
-    wstate->span[j].w = ((w & ~0x1ff) + dwdiff - (xfrac * dwdxh)) & ~0x3ff;             \
-    wstate->span[j].r = ((r & ~0x1ff) + drdiff - (xfrac * drdxh)) & ~0x3ff;             \
-    wstate->span[j].g = ((g & ~0x1ff) + dgdiff - (xfrac * dgdxh)) & ~0x3ff;             \
-    wstate->span[j].b = ((b & ~0x1ff) + dbdiff - (xfrac * dbdxh)) & ~0x3ff;             \
-    wstate->span[j].a = ((a & ~0x1ff) + dadiff - (xfrac * dadxh)) & ~0x3ff;             \
-    wstate->span[j].z = ((z & ~0x1ff) + dzdiff - (xfrac * dzdxh)) & ~0x3ff;             \
-}
-
-
-#define ADDVALUES_PRIM() {  \
-            s += dsde;  \
-            t += dtde;  \
-            w += dwde; \
-            r += drde; \
-            g += dgde; \
-            b += dbde; \
-            a += dade; \
-            z += dzde; \
-}
+#define ADDVALUES_PRIM() \
+    {                    \
+        s += dsde;       \
+        t += dtde;       \
+        w += dwde;       \
+        r += drde;       \
+        g += dgde;       \
+        b += dbde;       \
+        a += dade;       \
+        z += dzde;       \
+    }
 
     int32_t maxxmx = 0, minxmx = 0, maxxhx = 0, minxhx = 0;
 
     int spix = 0;
-    int ycur =  yh & ~3;
+    int ycur = yh & ~3;
     int ldflag = (sign_dxhdy ^ flip) ? 0 : 3;
     int invaly = 1;
-    //int length = 0;
+    // int length = 0;
     int32_t xrsc = 0, xlsc = 0, stickybit = 0;
     int32_t yllimit = 0, yhlimit = 0;
     if (yl & 0x2000)
@@ -2294,7 +2099,6 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
         ylfar += 4;
     else if ((yllimit >> 2) >= 0 && (yllimit >> 2) < 1023)
         wstate->span[(yllimit >> 2) + 1].validline = 0;
-
 
     if (yh & 0x2000)
         yhlimit = 0;
@@ -2314,240 +2118,226 @@ static void edgewalker_for_prims(struct rdp_state* wstate, int32_t* ewdata)
 
     xfrac = ((xright >> 8) & 0xff);
 
+    if (flip) {
+        for (k = ycur; k <= ylfar; k++) {
+            if (k == ym) {
 
-    if (flip)
-    {
-    for (k = ycur; k <= ylfar; k++)
-    {
-        if (k == ym)
-        {
+                xleft = xl & ~1;
+                xleft_inc = (dxldy >> 2) & ~1;
+            }
 
-            xleft = xl & ~1;
-            xleft_inc = (dxldy >> 2) & ~1;
+            spix = k & 3;
+
+            if (k >= yhclose) {
+                invaly = k < yhlimit || k >= yllimit;
+
+                j = k >> 2;
+
+                if (spix == 0) {
+                    maxxmx = 0;
+                    minxhx = 0xfff;
+                    allover = allunder = 1;
+                    allinval = 1;
+                }
+
+                stickybit = ((xright >> 1) & 0x1fff) > 0;
+                xrsc = ((xright >> 13) & 0x1ffe) | stickybit;
+
+                curunder = ((xright & 0x8000000) || (xrsc < clipxhshift && !(xright & 0x4000000)));
+
+                xrsc = curunder ? clipxhshift : (((xright >> 13) & 0x3ffe) | stickybit);
+                curover = ((xrsc & 0x2000) || (xrsc & 0x1fff) >= clipxlshift);
+                xrsc = curover ? clipxlshift : xrsc;
+                wstate->span[j].majorx[spix] = xrsc & 0x1fff;
+                allover &= curover;
+                allunder &= curunder;
+
+                stickybit = ((xleft >> 1) & 0x1fff) > 0;
+                xlsc = ((xleft >> 13) & 0x1ffe) | stickybit;
+                curunder = ((xleft & 0x8000000) || (xlsc < clipxhshift && !(xleft & 0x4000000)));
+                xlsc = curunder ? clipxhshift : (((xleft >> 13) & 0x3ffe) | stickybit);
+                curover = ((xlsc & 0x2000) || (xlsc & 0x1fff) >= clipxlshift);
+                xlsc = curover ? clipxlshift : xlsc;
+                wstate->span[j].minorx[spix] = xlsc & 0x1fff;
+                allover &= curover;
+                allunder &= curunder;
+
+                curcross = ((xleft ^ (1 << 27)) & (0x3fff << 14)) < ((xright ^ (1 << 27)) & (0x3fff << 14));
+
+                invaly |= curcross;
+                wstate->span[j].invalyscan[spix] = invaly;
+                allinval &= invaly;
+
+                if (!invaly) {
+                    maxxmx = (((xlsc >> 3) & 0xfff) > maxxmx) ? (xlsc >> 3) & 0xfff : maxxmx;
+                    minxhx = (((xrsc >> 3) & 0xfff) < minxhx) ? (xrsc >> 3) & 0xfff : minxhx;
+                }
+
+                if (spix == ldflag) {
+
+                    wstate->span[j].unscrx = SIGN(xright >> 16, 12);
+                    xfrac = (xright >> 8) & 0xff;
+                    ADJUST_ATTR_PRIM();
+                }
+
+                if (spix == 3) {
+                    wstate->span[j].lx = maxxmx;
+                    wstate->span[j].rx = minxhx;
+                    wstate->span[j].validline =
+                        !allinval && !allover && !allunder &&
+                        (!wstate->scfield || (wstate->scfield && !(wstate->sckeepodd ^ (j & 1))));
+
+                    if (wstate->span[j].validline && wstate->fb_size > PIXEL_SIZE_8BIT)
+                        if ((wstate->span[j].lx - wstate->span[j].rx) >= oldhb_diff)
+                            wstate->last_overwriting_scanline = j;
+
+                    // skip line if not assigned to this worker
+                    wstate->span[j].validline &= (!wstate->stride || j % wstate->stride == wstate->offset);
+                }
+            }
+
+            if (spix == 3) {
+                ADDVALUES_PRIM();
+            }
+
+            xleft += xleft_inc;
+            xright += xright_inc;
         }
-
-        spix = k & 3;
-
-        if (k >= yhclose)
-        {
-            invaly = k < yhlimit || k >= yllimit;
-
-            j = k >> 2;
-
-            if (spix == 0)
-            {
-                maxxmx = 0;
-                minxhx = 0xfff;
-                allover = allunder = 1;
-                allinval = 1;
+    } else {
+        for (k = ycur; k <= ylfar; k++) {
+            if (k == ym) {
+                xleft = xl & ~1;
+                xleft_inc = (dxldy >> 2) & ~1;
             }
 
-            stickybit = ((xright >> 1) & 0x1fff) > 0;
-            xrsc = ((xright >> 13) & 0x1ffe) | stickybit;
+            spix = k & 3;
 
+            if (k >= yhclose) {
+                invaly = k < yhlimit || k >= yllimit;
+                j = k >> 2;
 
-            curunder = ((xright & 0x8000000) || (xrsc < clipxhshift && !(xright & 0x4000000)));
+                if (spix == 0) {
+                    maxxhx = 0;
+                    minxmx = 0xfff;
+                    allover = allunder = 1;
+                    allinval = 1;
+                }
 
-            xrsc = curunder ? clipxhshift : (((xright >> 13) & 0x3ffe) | stickybit);
-            curover = ((xrsc & 0x2000) || (xrsc & 0x1fff) >= clipxlshift);
-            xrsc = curover ? clipxlshift : xrsc;
-            wstate->span[j].majorx[spix] = xrsc & 0x1fff;
-            allover &= curover;
-            allunder &= curunder;
+                stickybit = ((xright >> 1) & 0x1fff) > 0;
+                xrsc = ((xright >> 13) & 0x1ffe) | stickybit;
+                curunder = ((xright & 0x8000000) || (xrsc < clipxhshift && !(xright & 0x4000000)));
+                xrsc = curunder ? clipxhshift : (((xright >> 13) & 0x3ffe) | stickybit);
+                curover = ((xrsc & 0x2000) || (xrsc & 0x1fff) >= clipxlshift);
+                xrsc = curover ? clipxlshift : xrsc;
+                wstate->span[j].majorx[spix] = xrsc & 0x1fff;
+                allover &= curover;
+                allunder &= curunder;
 
-            stickybit = ((xleft >> 1) & 0x1fff) > 0;
-            xlsc = ((xleft >> 13) & 0x1ffe) | stickybit;
-            curunder = ((xleft & 0x8000000) || (xlsc < clipxhshift && !(xleft & 0x4000000)));
-            xlsc = curunder ? clipxhshift : (((xleft >> 13) & 0x3ffe) | stickybit);
-            curover = ((xlsc & 0x2000) || (xlsc & 0x1fff) >= clipxlshift);
-            xlsc = curover ? clipxlshift : xlsc;
-            wstate->span[j].minorx[spix] = xlsc & 0x1fff;
-            allover &= curover;
-            allunder &= curunder;
+                stickybit = ((xleft >> 1) & 0x1fff) > 0;
+                xlsc = ((xleft >> 13) & 0x1ffe) | stickybit;
+                curunder = ((xleft & 0x8000000) || (xlsc < clipxhshift && !(xleft & 0x4000000)));
+                xlsc = curunder ? clipxhshift : (((xleft >> 13) & 0x3ffe) | stickybit);
+                curover = ((xlsc & 0x2000) || (xlsc & 0x1fff) >= clipxlshift);
+                xlsc = curover ? clipxlshift : xlsc;
+                wstate->span[j].minorx[spix] = xlsc & 0x1fff;
+                allover &= curover;
+                allunder &= curunder;
 
+                curcross = ((xright ^ (1 << 27)) & (0x3fff << 14)) < ((xleft ^ (1 << 27)) & (0x3fff << 14));
 
+                invaly |= curcross;
+                wstate->span[j].invalyscan[spix] = invaly;
+                allinval &= invaly;
 
-            curcross = ((xleft ^ (1 << 27)) & (0x3fff << 14)) < ((xright ^ (1 << 27)) & (0x3fff << 14));
+                if (!invaly) {
+                    minxmx = (((xlsc >> 3) & 0xfff) < minxmx) ? (xlsc >> 3) & 0xfff : minxmx;
+                    maxxhx = (((xrsc >> 3) & 0xfff) > maxxhx) ? (xrsc >> 3) & 0xfff : maxxhx;
+                }
 
+                if (spix == ldflag) {
+                    wstate->span[j].unscrx = SIGN(xright >> 16, 12);
+                    xfrac = (xright >> 8) & 0xff;
+                    ADJUST_ATTR_PRIM();
+                }
 
-            invaly |= curcross;
-            wstate->span[j].invalyscan[spix] = invaly;
-            allinval &= invaly;
+                if (spix == 3) {
+                    wstate->span[j].lx = minxmx;
+                    wstate->span[j].rx = maxxhx;
+                    wstate->span[j].validline =
+                        !allinval && !allover && !allunder &&
+                        (!wstate->scfield || (wstate->scfield && !(wstate->sckeepodd ^ (j & 1))));
 
-            if (!invaly)
-            {
-                maxxmx = (((xlsc >> 3) & 0xfff) > maxxmx) ? (xlsc >> 3) & 0xfff : maxxmx;
-                minxhx = (((xrsc >> 3) & 0xfff) < minxhx) ? (xrsc >> 3) & 0xfff : minxhx;
+                    if (wstate->span[j].validline && wstate->fb_size > PIXEL_SIZE_8BIT)
+                        if ((wstate->span[j].rx - wstate->span[j].lx) >= oldhb_diff)
+                            wstate->last_overwriting_scanline = j;
+
+                    // skip line if not assigned to this worker
+                    wstate->span[j].validline &= (!wstate->stride || j % wstate->stride == wstate->offset);
+                }
             }
 
-            if (spix == ldflag)
-            {
-
-
-
-
-                wstate->span[j].unscrx = SIGN(xright >> 16, 12);
-                xfrac = (xright >> 8) & 0xff;
-                ADJUST_ATTR_PRIM();
+            if (spix == 3) {
+                ADDVALUES_PRIM();
             }
 
-            if (spix == 3)
-            {
-                wstate->span[j].lx = maxxmx;
-                wstate->span[j].rx = minxhx;
-                wstate->span[j].validline  = !allinval && !allover && !allunder && (!wstate->scfield || (wstate->scfield && !(wstate->sckeepodd ^ (j & 1))));
-
-                if (wstate->span[j].validline && wstate->fb_size > PIXEL_SIZE_8BIT)
-                    if ((wstate->span[j].lx - wstate->span[j].rx) >= oldhb_diff)
-                        wstate->last_overwriting_scanline = j;
-
-                // skip line if not assigned to this worker
-                wstate->span[j].validline &= (!wstate->stride || j % wstate->stride == wstate->offset);
-            }
-
-
+            xleft += xleft_inc;
+            xright += xright_inc;
         }
-
-        if (spix == 3)
-        {
-            ADDVALUES_PRIM();
-        }
-
-
-
-        xleft += xleft_inc;
-        xright += xright_inc;
-
-    }
-    }
-    else
-    {
-    for (k = ycur; k <= ylfar; k++)
-    {
-        if (k == ym)
-        {
-            xleft = xl & ~1;
-            xleft_inc = (dxldy >> 2) & ~1;
-        }
-
-        spix = k & 3;
-
-        if (k >= yhclose)
-        {
-            invaly = k < yhlimit || k >= yllimit;
-            j = k >> 2;
-
-            if (spix == 0)
-            {
-                maxxhx = 0;
-                minxmx = 0xfff;
-                allover = allunder = 1;
-                allinval = 1;
-            }
-
-            stickybit = ((xright >> 1) & 0x1fff) > 0;
-            xrsc = ((xright >> 13) & 0x1ffe) | stickybit;
-            curunder = ((xright & 0x8000000) || (xrsc < clipxhshift && !(xright & 0x4000000)));
-            xrsc = curunder ? clipxhshift : (((xright >> 13) & 0x3ffe) | stickybit);
-            curover = ((xrsc & 0x2000) || (xrsc & 0x1fff) >= clipxlshift);
-            xrsc = curover ? clipxlshift : xrsc;
-            wstate->span[j].majorx[spix] = xrsc & 0x1fff;
-            allover &= curover;
-            allunder &= curunder;
-
-            stickybit = ((xleft >> 1) & 0x1fff) > 0;
-            xlsc = ((xleft >> 13) & 0x1ffe) | stickybit;
-            curunder = ((xleft & 0x8000000) || (xlsc < clipxhshift && !(xleft & 0x4000000)));
-            xlsc = curunder ? clipxhshift : (((xleft >> 13) & 0x3ffe) | stickybit);
-            curover = ((xlsc & 0x2000) || (xlsc & 0x1fff) >= clipxlshift);
-            xlsc = curover ? clipxlshift : xlsc;
-            wstate->span[j].minorx[spix] = xlsc & 0x1fff;
-            allover &= curover;
-            allunder &= curunder;
-
-            curcross = ((xright ^ (1 << 27)) & (0x3fff << 14)) < ((xleft ^ (1 << 27)) & (0x3fff << 14));
-
-            invaly |= curcross;
-            wstate->span[j].invalyscan[spix] = invaly;
-            allinval &= invaly;
-
-            if (!invaly)
-            {
-                minxmx = (((xlsc >> 3) & 0xfff) < minxmx) ? (xlsc >> 3) & 0xfff : minxmx;
-                maxxhx = (((xrsc >> 3) & 0xfff) > maxxhx) ? (xrsc >> 3) & 0xfff : maxxhx;
-            }
-
-            if (spix == ldflag)
-            {
-                wstate->span[j].unscrx  = SIGN(xright >> 16, 12);
-                xfrac = (xright >> 8) & 0xff;
-                ADJUST_ATTR_PRIM();
-            }
-
-            if (spix == 3)
-            {
-                wstate->span[j].lx = minxmx;
-                wstate->span[j].rx = maxxhx;
-                wstate->span[j].validline  = !allinval && !allover && !allunder && (!wstate->scfield || (wstate->scfield && !(wstate->sckeepodd ^ (j & 1))));
-
-                if (wstate->span[j].validline && wstate->fb_size > PIXEL_SIZE_8BIT)
-                    if ((wstate->span[j].rx - wstate->span[j].lx) >= oldhb_diff)
-                        wstate->last_overwriting_scanline = j;
-
-                // skip line if not assigned to this worker
-                wstate->span[j].validline &= (!wstate->stride || j % wstate->stride == wstate->offset);
-            }
-
-        }
-
-        if (spix == 3)
-        {
-            ADDVALUES_PRIM();
-        }
-
-        xleft += xleft_inc;
-        xright += xright_inc;
-
-    }
     }
 
-
-
-
-    switch(wstate->other_modes.cycle_type)
-    {
+    switch (wstate->other_modes.cycle_type) {
         case CYCLE_TYPE_1:
-            switch (wstate->other_modes.f.textureuselevel0)
-            {
-                case 0: render_spans_1cycle_complete(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip); break;
-                case 1: render_spans_1cycle_notexel1(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip); break;
-                case 2: default: render_spans_1cycle_notex(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip); break;
+            switch (wstate->other_modes.f.textureuselevel0) {
+                case 0:
+                    render_spans_1cycle_complete(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
+                    break;
+                case 1:
+                    render_spans_1cycle_notexel1(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
+                    break;
+                case 2:
+                default:
+                    render_spans_1cycle_notex(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
+                    break;
             }
             break;
         case CYCLE_TYPE_2:
-            switch (wstate->other_modes.f.textureuselevel1)
-            {
-                case 0: render_spans_2cycle_complete(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip); break;
-                case 1: render_spans_2cycle_notexelnext(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip); break;
-                case 2: render_spans_2cycle_notexel1(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip); break;
-                case 3: default: render_spans_2cycle_notex(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip); break;
+            switch (wstate->other_modes.f.textureuselevel1) {
+                case 0:
+                    render_spans_2cycle_complete(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
+                    break;
+                case 1:
+                    render_spans_2cycle_notexelnext(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
+                    break;
+                case 2:
+                    render_spans_2cycle_notexel1(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
+                    break;
+                case 3:
+                default:
+                    render_spans_2cycle_notex(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
+                    break;
             }
             break;
-        case CYCLE_TYPE_COPY: render_spans_copy(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip); break;
-        case CYCLE_TYPE_FILL: render_spans_fill(wstate, yhlimit >> 2, yllimit >> 2, flip); break;
-        default: msg_error("cycle_type %d", wstate->other_modes.cycle_type); break;
+        case CYCLE_TYPE_COPY:
+            render_spans_copy(wstate, yhlimit >> 2, yllimit >> 2, tilenum, flip);
+            break;
+        case CYCLE_TYPE_FILL:
+            render_spans_fill(wstate, yhlimit >> 2, yllimit >> 2, flip);
+            break;
+        default:
+            msg_error("cycle_type %d", wstate->other_modes.cycle_type);
+            break;
     }
-
-
 }
 
-static void rasterizer_init(struct rdp_state* wstate)
+static void
+rasterizer_init(struct rdp_state *wstate)
 {
     wstate->clip.xh = 0x2000;
     wstate->clip.yh = 0x2000;
 }
 
-void rdp_tri_noshade(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_tri_noshade(struct rdp_state *wstate, const uint32_t *args)
 {
     int32_t ewdata[CMD_MAX_INTS];
     memcpy(&ewdata[0], args, 8 * sizeof(int32_t));
@@ -2555,7 +2345,8 @@ void rdp_tri_noshade(struct rdp_state* wstate, const uint32_t* args)
     edgewalker_for_prims(wstate, ewdata);
 }
 
-void rdp_tri_noshade_z(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_tri_noshade_z(struct rdp_state *wstate, const uint32_t *args)
 {
     int32_t ewdata[CMD_MAX_INTS];
     memcpy(&ewdata[0], args, 8 * sizeof(int32_t));
@@ -2564,7 +2355,8 @@ void rdp_tri_noshade_z(struct rdp_state* wstate, const uint32_t* args)
     edgewalker_for_prims(wstate, ewdata);
 }
 
-void rdp_tri_tex(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_tri_tex(struct rdp_state *wstate, const uint32_t *args)
 {
     int32_t ewdata[CMD_MAX_INTS];
     memcpy(&ewdata[0], args, 8 * sizeof(int32_t));
@@ -2574,7 +2366,8 @@ void rdp_tri_tex(struct rdp_state* wstate, const uint32_t* args)
     edgewalker_for_prims(wstate, ewdata);
 }
 
-void rdp_tri_tex_z(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_tri_tex_z(struct rdp_state *wstate, const uint32_t *args)
 {
     int32_t ewdata[CMD_MAX_INTS];
     memcpy(&ewdata[0], args, 8 * sizeof(int32_t));
@@ -2582,17 +2375,11 @@ void rdp_tri_tex_z(struct rdp_state* wstate, const uint32_t* args)
     memcpy(&ewdata[24], args + 8, 16 * sizeof(int32_t));
     memcpy(&ewdata[40], args + 24, 4 * sizeof(int32_t));
 
-
-
-
-
-
     edgewalker_for_prims(wstate, ewdata);
-
-
 }
 
-void rdp_tri_shade(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_tri_shade(struct rdp_state *wstate, const uint32_t *args)
 {
     int32_t ewdata[CMD_MAX_INTS];
     memcpy(&ewdata[0], args, 24 * sizeof(int32_t));
@@ -2600,7 +2387,8 @@ void rdp_tri_shade(struct rdp_state* wstate, const uint32_t* args)
     edgewalker_for_prims(wstate, ewdata);
 }
 
-void rdp_tri_shade_z(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_tri_shade_z(struct rdp_state *wstate, const uint32_t *args)
 {
     int32_t ewdata[CMD_MAX_INTS];
     memcpy(&ewdata[0], args, 24 * sizeof(int32_t));
@@ -2609,7 +2397,8 @@ void rdp_tri_shade_z(struct rdp_state* wstate, const uint32_t* args)
     edgewalker_for_prims(wstate, ewdata);
 }
 
-void rdp_tri_texshade(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_tri_texshade(struct rdp_state *wstate, const uint32_t *args)
 {
     int32_t ewdata[CMD_MAX_INTS];
     memcpy(&ewdata[0], args, 40 * sizeof(int32_t));
@@ -2617,32 +2406,28 @@ void rdp_tri_texshade(struct rdp_state* wstate, const uint32_t* args)
     edgewalker_for_prims(wstate, ewdata);
 }
 
-void rdp_tri_texshade_z(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_tri_texshade_z(struct rdp_state *wstate, const uint32_t *args)
 {
     int32_t ewdata[CMD_MAX_INTS];
     memcpy(&ewdata[0], args, CMD_MAX_SIZE);
 
-
-
-
-
     edgewalker_for_prims(wstate, ewdata);
-
-
 }
 
-void rdp_tex_rect(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_tex_rect(struct rdp_state *wstate, const uint32_t *args)
 {
-    uint32_t tilenum    = (args[1] >> 24) & 0x7;
+    uint32_t tilenum = (args[1] >> 24) & 0x7;
     uint32_t xl = (args[0] >> 12) & 0xfff;
-    uint32_t yl = (args[0] >>  0) & 0xfff;
+    uint32_t yl = (args[0] >> 0) & 0xfff;
     uint32_t xh = (args[1] >> 12) & 0xfff;
-    uint32_t yh = (args[1] >>  0) & 0xfff;
+    uint32_t yh = (args[1] >> 0) & 0xfff;
 
     int32_t s = (args[2] >> 16) & 0xffff;
-    int32_t t = (args[2] >>  0) & 0xffff;
+    int32_t t = (args[2] >> 0) & 0xffff;
     int32_t dsdx = (args[3] >> 16) & 0xffff;
-    int32_t dtdy = (args[3] >>  0) & 0xffff;
+    int32_t dtdy = (args[3] >> 0) & 0xffff;
 
     dsdx = SIGN16(dsdx);
     dtdy = SIGN16(dtdy);
@@ -2681,24 +2466,22 @@ void rdp_tex_rect(struct rdp_state* wstate, const uint32_t* args)
     ewdata[39] = 0;
     memset(&ewdata[40], 0, 4 * sizeof(int32_t));
 
-
-
     edgewalker_for_prims(wstate, ewdata);
-
 }
 
-void rdp_tex_rect_flip(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_tex_rect_flip(struct rdp_state *wstate, const uint32_t *args)
 {
-    uint32_t tilenum    = (args[1] >> 24) & 0x7;
+    uint32_t tilenum = (args[1] >> 24) & 0x7;
     uint32_t xl = (args[0] >> 12) & 0xfff;
-    uint32_t yl = (args[0] >>  0) & 0xfff;
+    uint32_t yl = (args[0] >> 0) & 0xfff;
     uint32_t xh = (args[1] >> 12) & 0xfff;
-    uint32_t yh = (args[1] >>  0) & 0xfff;
+    uint32_t yh = (args[1] >> 0) & 0xfff;
 
     int32_t s = (args[2] >> 16) & 0xffff;
-    int32_t t = (args[2] >>  0) & 0xffff;
+    int32_t t = (args[2] >> 0) & 0xffff;
     int32_t dsdx = (args[3] >> 16) & 0xffff;
-    int32_t dtdy = (args[3] >>  0) & 0xffff;
+    int32_t dtdy = (args[3] >> 0) & 0xffff;
 
     dsdx = SIGN16(dsdx);
     dtdy = SIGN16(dtdy);
@@ -2741,12 +2524,13 @@ void rdp_tex_rect_flip(struct rdp_state* wstate, const uint32_t* args)
     edgewalker_for_prims(wstate, ewdata);
 }
 
-void rdp_fill_rect(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_fill_rect(struct rdp_state *wstate, const uint32_t *args)
 {
     uint32_t xl = (args[0] >> 12) & 0xfff;
-    uint32_t yl = (args[0] >>  0) & 0xfff;
+    uint32_t yl = (args[0] >> 0) & 0xfff;
     uint32_t xh = (args[1] >> 12) & 0xfff;
-    uint32_t yh = (args[1] >>  0) & 0xfff;
+    uint32_t yh = (args[1] >> 0) & 0xfff;
 
     if (wstate->other_modes.cycle_type == CYCLE_TYPE_FILL || wstate->other_modes.cycle_type == CYCLE_TYPE_COPY)
         yl |= 3;
@@ -2768,20 +2552,21 @@ void rdp_fill_rect(struct rdp_state* wstate, const uint32_t* args)
     edgewalker_for_prims(wstate, ewdata);
 }
 
-void rdp_set_prim_depth(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_set_prim_depth(struct rdp_state *wstate, const uint32_t *args)
 {
     wstate->primitive_z = args[1] & (0x7fff << 16);
-
 
     wstate->primitive_delta_z = (uint16_t)(args[1]);
 }
 
-void rdp_set_scissor(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_set_scissor(struct rdp_state *wstate, const uint32_t *args)
 {
     wstate->clip.xh = (args[0] >> 12) & 0xfff;
-    wstate->clip.yh = (args[0] >>  0) & 0xfff;
+    wstate->clip.yh = (args[0] >> 0) & 0xfff;
     wstate->clip.xl = (args[1] >> 12) & 0xfff;
-    wstate->clip.yl = (args[1] >>  0) & 0xfff;
+    wstate->clip.yl = (args[1] >> 0) & 0xfff;
 
     wstate->scfield = (args[1] >> 25) & 1;
     wstate->sckeepodd = (args[1] >> 24) & 1;

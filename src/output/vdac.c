@@ -13,10 +13,10 @@
 #endif
 
 #define GLES_SHADER_HEADER "#version 300 es\nprecision lowp float;\n"
-#define GL_SHADER_HEADER "#version 330 core\n"
+#define GL_SHADER_HEADER   "#version 330 core\n"
 
 #define TEX_FORMAT GL_RGBA
-#define TEX_TYPE GL_UNSIGNED_BYTE
+#define TEX_TYPE   GL_UNSIGNED_BYTE
 
 static bool m_fbo_enabled;
 static GLuint m_fbo;
@@ -35,7 +35,8 @@ static GLuint m_program;
 static GLuint m_vao;
 
 #ifdef _DEBUG
-static void gl_check_errors(void)
+static void
+gl_check_errors(void)
 {
     GLenum err;
     static int32_t invalid_op_count = 0;
@@ -52,7 +53,7 @@ static void gl_check_errors(void)
             invalid_op_count = 0;
         }
 
-        char* err_str;
+        char *err_str;
         switch (err) {
             case GL_INVALID_OPERATION:
                 err_str = "INVALID_OPERATION";
@@ -79,7 +80,8 @@ static void gl_check_errors(void)
 #define gl_check_errors(...)
 #endif
 
-static void gl_fbo_create(uint32_t width, uint32_t height)
+static void
+gl_fbo_create(uint32_t width, uint32_t height)
 {
     // prepare FB texture
     glGenTextures(1, &m_fbtex);
@@ -104,7 +106,8 @@ static void gl_fbo_create(uint32_t width, uint32_t height)
     }
 }
 
-static void gl_fbo_delete(void)
+static void
+gl_fbo_delete(void)
 {
     if (m_fbo) {
         glDeleteFramebuffers(1, &m_fbo);
@@ -117,11 +120,12 @@ static void gl_fbo_delete(void)
     }
 }
 
-static bool gl_shader_load_file(GLuint shader, const char* path)
+static bool
+gl_shader_load_file(GLuint shader, const char *path)
 {
     bool success = false;
-    GLchar* source = NULL;
-    FILE* fp = fopen(path, "rb");
+    GLchar *source = NULL;
+    FILE *fp = fopen(path, "rb");
     if (!fp) {
         // fail quietly
         goto end;
@@ -149,7 +153,7 @@ static bool gl_shader_load_file(GLuint shader, const char* path)
     source[source_size] = 0;
 
     // send string to OpenGL
-    const GLchar* source_ptr = source;
+    const GLchar *source_ptr = source;
     glShaderSource(shader, 1, &source_ptr, NULL);
 
     success = true;
@@ -165,7 +169,8 @@ end:
     return success;
 }
 
-static GLuint gl_shader_compile(GLenum type, const GLchar* source, const char* path)
+static GLuint
+gl_shader_compile(GLenum type, const GLchar *source, const char *path)
 {
     GLuint shader = glCreateShader(type);
 
@@ -188,7 +193,8 @@ static GLuint gl_shader_compile(GLenum type, const GLchar* source, const char* p
     return shader;
 }
 
-static GLuint gl_shader_link(GLuint vert, GLuint frag)
+static GLuint
+gl_shader_link(GLuint vert, GLuint frag)
 {
     GLuint program = glCreateProgram();
     glAttachShader(program, vert);
@@ -210,7 +216,8 @@ static GLuint gl_shader_link(GLuint vert, GLuint frag)
     return program;
 }
 
-void vdac_init(struct n64video_config* config)
+void
+vdac_init(struct n64video_config *config)
 {
     screen_init(config);
 
@@ -219,7 +226,7 @@ void vdac_init(struct n64video_config* config)
     ogl_LoadFunctions();
 #endif
 
-    const char* gl_version = (const char*)glGetString(GL_VERSION);
+    const char *gl_version = (const char *)glGetString(GL_VERSION);
 
 #ifndef GLES
     const int is_gles = strstr(gl_version, "OpenGL ES") != NULL;
@@ -236,22 +243,20 @@ void vdac_init(struct n64video_config* config)
     // is defined by the vertex ID, so a VBO is not required.
     GLchar vert_shader[256];
     sprintf(vert_shader, "%s%s", (is_gles ? GLES_SHADER_HEADER : GL_SHADER_HEADER),
-        "out vec2 uv;\n"
-        "void main(void) {\n"
-        "    uv = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);\n"
-        "    gl_Position = vec4(uv * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);\n"
-        "}\n"
-    );
+            "out vec2 uv;\n"
+            "void main(void) {\n"
+            "    uv = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);\n"
+            "    gl_Position = vec4(uv * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);\n"
+            "}\n");
 
     GLchar frag_shader[256];
     sprintf(frag_shader, "%s%s", (is_gles ? GLES_SHADER_HEADER : GL_SHADER_HEADER),
-        "in vec2 uv;\n"
-        "layout(location = 0) out vec4 color;\n"
-        "uniform sampler2D tex0;\n"
-        "void main(void) {\n"
-        "    color = texture(tex0, uv);\n"
-        "}\n"
-    );
+            "in vec2 uv;\n"
+            "layout(location = 0) out vec4 color;\n"
+            "uniform sampler2D tex0;\n"
+            "void main(void) {\n"
+            "    color = texture(tex0, uv);\n"
+            "}\n");
 
     // compile and link OpenGL program
     GLuint vert = gl_shader_compile(GL_VERTEX_SHADER, vert_shader, "alp_screen.vert");
@@ -297,7 +302,8 @@ void vdac_init(struct n64video_config* config)
     gl_check_errors();
 }
 
-void vdac_read(struct n64video_frame_buffer* fb, bool alpha)
+void
+vdac_read(struct n64video_frame_buffer *fb, bool alpha)
 {
     uint32_t width, height;
 
@@ -348,7 +354,8 @@ void vdac_read(struct n64video_frame_buffer* fb, bool alpha)
     }
 }
 
-void vdac_write(struct n64video_frame_buffer* fb)
+void
+vdac_write(struct n64video_frame_buffer *fb)
 {
     bool raw_size_changed = m_rawtex_width != fb->width || m_rawtex_height != fb->height;
     bool fb_size_changed = m_fbtex_width != fb->width || m_fbtex_height != fb->height_out;
@@ -362,14 +369,12 @@ void vdac_write(struct n64video_frame_buffer* fb)
         glPixelStorei(GL_UNPACK_ROW_LENGTH, fb->pitch);
 
         // reallocate texture buffer on GPU
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_rawtex_width,
-            m_rawtex_height, 0, TEX_FORMAT, TEX_TYPE, fb->pixels);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_rawtex_width, m_rawtex_height, 0, TEX_FORMAT, TEX_TYPE, fb->pixels);
 
         msg_debug("%s: resized framebuffer texture: %dx%d", __FUNCTION__, m_rawtex_width, m_rawtex_height);
     } else {
         // copy local buffer to GPU texture buffer
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_rawtex_width, m_rawtex_height,
-            TEX_FORMAT, TEX_TYPE, fb->pixels);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_rawtex_width, m_rawtex_height, TEX_FORMAT, TEX_TYPE, fb->pixels);
     }
 
     if (fb_size_changed) {
@@ -384,7 +389,8 @@ void vdac_write(struct n64video_frame_buffer* fb)
     }
 }
 
-void vdac_sync(bool valid)
+void
+vdac_sync(bool valid)
 {
     // clear old buffers
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -470,7 +476,8 @@ void vdac_sync(bool valid)
         GLint dst_x1 = dst_x0 + out_width - 1;
         GLint dst_y1 = dst_y0 + out_height - 1;
 
-        glBlitFramebuffer(src_x0, src_y0, src_x1, src_y1, dst_x0, dst_y0, dst_x1, dst_y1, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBlitFramebuffer(src_x0, src_y0, src_x1, src_y1, dst_x0, dst_y0, dst_x1, dst_y1, GL_COLOR_BUFFER_BIT,
+                          GL_NEAREST);
     } else {
         // configure viewport
         glViewport(out_x, out_y, out_width, out_height);
@@ -486,7 +493,8 @@ void vdac_sync(bool valid)
     screen_update();
 }
 
-void vdac_close(void)
+void
+vdac_close(void)
 {
     m_rawtex_width = 0;
     m_rawtex_height = 0;

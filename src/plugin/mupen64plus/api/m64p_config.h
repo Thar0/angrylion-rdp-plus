@@ -37,11 +37,12 @@ extern "C" {
  * This function is called to enumerate the list of Sections in the Mupen64Plus
  * configuration file. It is expected that there will be a section named "Core"
  * for core-specific configuration data, "Graphics" for common graphics options,
- * and one or more sections for each plugin library. 
+ * and one or more sections for each plugin library.
  */
 typedef m64p_error (*ptr_ConfigListSections)(void *, void (*)(void *, const char *));
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigListSections(void *, void (*)(void *, const char *));
+EXPORT m64p_error CALL
+ConfigListSections(void *, void (*)(void *, const char *));
 #endif
 
 /* ConfigOpenSection()
@@ -52,17 +53,19 @@ EXPORT m64p_error CALL ConfigListSections(void *, void (*)(void *, const char *)
  */
 typedef m64p_error (*ptr_ConfigOpenSection)(const char *, m64p_handle *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigOpenSection(const char *, m64p_handle *);
+EXPORT m64p_error CALL
+ConfigOpenSection(const char *, m64p_handle *);
 #endif
 
 /* ConfigListParameters()
  *
  * This function is called to enumerate the list of Parameters in a given
- * Section of the Mupen64Plus configuration file. 
+ * Section of the Mupen64Plus configuration file.
  */
 typedef m64p_error (*ptr_ConfigListParameters)(m64p_handle, void *, void (*)(void *, const char *, m64p_type));
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigListParameters(m64p_handle, void *, void (*)(void *, const char *, m64p_type));
+EXPORT m64p_error CALL
+ConfigListParameters(m64p_handle, void *, void (*)(void *, const char *, m64p_type));
 #endif
 
 /* ConfigSaveFile()
@@ -71,7 +74,8 @@ EXPORT m64p_error CALL ConfigListParameters(m64p_handle, void *, void (*)(void *
  */
 typedef m64p_error (*ptr_ConfigSaveFile)(void);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigSaveFile(void);
+EXPORT m64p_error CALL
+ConfigSaveFile(void);
 #endif
 
 /* ConfigSaveSection()
@@ -80,16 +84,19 @@ EXPORT m64p_error CALL ConfigSaveFile(void);
  */
 typedef m64p_error (*ptr_ConfigSaveSection)(const char *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigSaveSection(const char *);
+EXPORT m64p_error CALL
+ConfigSaveSection(const char *);
 #endif
 
 /* ConfigHasUnsavedChanges()
  *
- * This function determines if a given Section (or all sections) of the Mupen64Plus Core configuration file has been modified since it was last saved or loaded.
+ * This function determines if a given Section (or all sections) of the Mupen64Plus Core configuration file has been
+ * modified since it was last saved or loaded.
  */
 typedef int (*ptr_ConfigHasUnsavedChanges)(const char *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT int CALL ConfigHasUnsavedChanges(const char *);
+EXPORT int CALL
+ConfigHasUnsavedChanges(const char *);
 #endif
 
 /* ConfigDeleteSection()
@@ -98,16 +105,19 @@ EXPORT int CALL ConfigHasUnsavedChanges(const char *);
  */
 typedef m64p_error (*ptr_ConfigDeleteSection)(const char *SectionName);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigDeleteSection(const char *SectionName);
+EXPORT m64p_error CALL
+ConfigDeleteSection(const char *SectionName);
 #endif
 
 /* ConfigRevertChanges()
  *
- * This function reverts changes previously made to one section of the configuration file, so that it will match with the configuration at the last time that it was loaded from or saved to disk.
+ * This function reverts changes previously made to one section of the configuration file, so that it will match with
+ * the configuration at the last time that it was loaded from or saved to disk.
  */
 typedef m64p_error (*ptr_ConfigRevertChanges)(const char *SectionName);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigRevertChanges(const char *SectionName);
+EXPORT m64p_error CALL
+ConfigRevertChanges(const char *SectionName);
 #endif
 
 /* ConfigSetParameter()
@@ -117,7 +127,8 @@ EXPORT m64p_error CALL ConfigRevertChanges(const char *SectionName);
  */
 typedef m64p_error (*ptr_ConfigSetParameter)(m64p_handle, const char *, m64p_type, const void *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigSetParameter(m64p_handle, const char *, m64p_type, const void *);
+EXPORT m64p_error CALL
+ConfigSetParameter(m64p_handle, const char *, m64p_type, const void *);
 #endif
 
 /* ConfigSetParameterHelp()
@@ -127,25 +138,28 @@ EXPORT m64p_error CALL ConfigSetParameter(m64p_handle, const char *, m64p_type, 
  */
 typedef m64p_error (*ptr_ConfigSetParameterHelp)(m64p_handle, const char *, const char *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigSetParameterHelp(m64p_handle, const char *, const char *);
+EXPORT m64p_error CALL
+ConfigSetParameterHelp(m64p_handle, const char *, const char *);
 #endif
 
 /* ConfigGetParameter()
  *
- * This function retrieves the value of one of the emulator's parameters. 
+ * This function retrieves the value of one of the emulator's parameters.
  */
 typedef m64p_error (*ptr_ConfigGetParameter)(m64p_handle, const char *, m64p_type, void *, int);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigGetParameter(m64p_handle, const char *, m64p_type, void *, int);
+EXPORT m64p_error CALL
+ConfigGetParameter(m64p_handle, const char *, m64p_type, void *, int);
 #endif
 
 /* ConfigGetParameterType()
  *
- * This function retrieves the type of one of the emulator's parameters. 
+ * This function retrieves the type of one of the emulator's parameters.
  */
 typedef m64p_error (*ptr_ConfigGetParameterType)(m64p_handle, const char *, m64p_type *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigGetParameterType(m64p_handle, const char *, m64p_type *);
+EXPORT m64p_error CALL
+ConfigGetParameterType(m64p_handle, const char *, m64p_type *);
 #endif
 
 /* ConfigGetParameterHelp()
@@ -153,9 +167,10 @@ EXPORT m64p_error CALL ConfigGetParameterType(m64p_handle, const char *, m64p_ty
  * This function retrieves the help information about one of the emulator's
  * parameters.
  */
-typedef const char * (*ptr_ConfigGetParameterHelp)(m64p_handle, const char *);
+typedef const char *(*ptr_ConfigGetParameterHelp)(m64p_handle, const char *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT const char * CALL ConfigGetParameterHelp(m64p_handle, const char *);
+EXPORT const char *CALL
+ConfigGetParameterHelp(m64p_handle, const char *);
 #endif
 
 /* ConfigSetDefault***()
@@ -172,10 +187,14 @@ typedef m64p_error (*ptr_ConfigSetDefaultFloat)(m64p_handle, const char *, float
 typedef m64p_error (*ptr_ConfigSetDefaultBool)(m64p_handle, const char *, int, const char *);
 typedef m64p_error (*ptr_ConfigSetDefaultString)(m64p_handle, const char *, const char *, const char *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigSetDefaultInt(m64p_handle, const char *, int, const char *);
-EXPORT m64p_error CALL ConfigSetDefaultFloat(m64p_handle, const char *, float, const char *);
-EXPORT m64p_error CALL ConfigSetDefaultBool(m64p_handle, const char *, int, const char *);
-EXPORT m64p_error CALL ConfigSetDefaultString(m64p_handle, const char *, const char *, const char *);
+EXPORT m64p_error CALL
+ConfigSetDefaultInt(m64p_handle, const char *, int, const char *);
+EXPORT m64p_error CALL
+ConfigSetDefaultFloat(m64p_handle, const char *, float, const char *);
+EXPORT m64p_error CALL
+ConfigSetDefaultBool(m64p_handle, const char *, int, const char *);
+EXPORT m64p_error CALL
+ConfigSetDefaultString(m64p_handle, const char *, const char *, const char *);
 #endif
 
 /* ConfigGetParam***()
@@ -187,15 +206,19 @@ EXPORT m64p_error CALL ConfigSetDefaultString(m64p_handle, const char *, const c
  * via the DebugCallback() function, and either a 0 (zero) or an empty string
  * will be returned.
  */
-typedef int          (*ptr_ConfigGetParamInt)(m64p_handle, const char *);
-typedef float        (*ptr_ConfigGetParamFloat)(m64p_handle, const char *);
-typedef int          (*ptr_ConfigGetParamBool)(m64p_handle, const char *);
-typedef const char * (*ptr_ConfigGetParamString)(m64p_handle, const char *);
+typedef int (*ptr_ConfigGetParamInt)(m64p_handle, const char *);
+typedef float (*ptr_ConfigGetParamFloat)(m64p_handle, const char *);
+typedef int (*ptr_ConfigGetParamBool)(m64p_handle, const char *);
+typedef const char *(*ptr_ConfigGetParamString)(m64p_handle, const char *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT int          CALL ConfigGetParamInt(m64p_handle, const char *);
-EXPORT float        CALL ConfigGetParamFloat(m64p_handle, const char *);
-EXPORT int          CALL ConfigGetParamBool(m64p_handle, const char *);
-EXPORT const char * CALL ConfigGetParamString(m64p_handle, const char *);
+EXPORT int CALL
+ConfigGetParamInt(m64p_handle, const char *);
+EXPORT float CALL
+ConfigGetParamFloat(m64p_handle, const char *);
+EXPORT int CALL
+ConfigGetParamBool(m64p_handle, const char *);
+EXPORT const char *CALL
+ConfigGetParamString(m64p_handle, const char *);
 #endif
 
 /* ConfigGetSharedDataFilepath()
@@ -204,9 +227,10 @@ EXPORT const char * CALL ConfigGetParamString(m64p_handle, const char *);
  * given shared data file. This type of file is intended to be shared among
  * multiple users on a system, so it is likely to be read-only.
  */
-typedef const char * (*ptr_ConfigGetSharedDataFilepath)(const char *);
+typedef const char *(*ptr_ConfigGetSharedDataFilepath)(const char *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT const char * CALL ConfigGetSharedDataFilepath(const char *);
+EXPORT const char *CALL
+ConfigGetSharedDataFilepath(const char *);
 #endif
 
 /* ConfigGetUserConfigPath()
@@ -215,9 +239,10 @@ EXPORT const char * CALL ConfigGetSharedDataFilepath(const char *);
  * directory for storing user-specific configuration files. This will be the
  * directory where "mupen64plus.cfg" is located.
  */
-typedef const char * (*ptr_ConfigGetUserConfigPath)(void);
+typedef const char *(*ptr_ConfigGetUserConfigPath)(void);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT const char * CALL ConfigGetUserConfigPath(void);
+EXPORT const char *CALL
+ConfigGetUserConfigPath(void);
 #endif
 
 /* ConfigGetUserDataPath()
@@ -226,9 +251,10 @@ EXPORT const char * CALL ConfigGetUserConfigPath(void);
  * directory for storing user-specific data files. This may be used to store
  * files such as screenshots, saved game states, or hi-res textures.
  */
-typedef const char * (*ptr_ConfigGetUserDataPath)(void);
+typedef const char *(*ptr_ConfigGetUserDataPath)(void);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT const char * CALL ConfigGetUserDataPath(void);
+EXPORT const char *CALL
+ConfigGetUserDataPath(void);
 #endif
 
 /* ConfigGetUserCachePath()
@@ -239,9 +265,10 @@ EXPORT const char * CALL ConfigGetUserDataPath(void);
  * should not be stored here.  This directory may be used to store files such
  * as the ROM browser cache.
  */
-typedef const char * (*ptr_ConfigGetUserCachePath)(void);
+typedef const char *(*ptr_ConfigGetUserCachePath)(void);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT const char * CALL ConfigGetUserCachePath(void);
+EXPORT const char *CALL
+ConfigGetUserCachePath(void);
 #endif
 
 /* ConfigExternalOpen()
@@ -251,7 +278,8 @@ EXPORT const char * CALL ConfigGetUserCachePath(void);
  */
 typedef m64p_error (*ptr_ConfigExternalOpen)(const char *, m64p_handle *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigExternalOpen(const char *, m64p_handle *);
+EXPORT m64p_error CALL
+ConfigExternalOpen(const char *, m64p_handle *);
 #endif
 
 /* ConfigExternalClose()
@@ -270,7 +298,8 @@ EXPORT m64p_error CALL ConfigExternalClose(m64p_handle);
  */
 typedef m64p_error (*ptr_ConfigExternalGetParameter)(m64p_handle, const char *, const char *, char *, int);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL ConfigExternalGetParameter(m64p_handle, const char *, const char *, char *, int);
+EXPORT m64p_error CALL
+ConfigExternalGetParameter(m64p_handle, const char *, const char *, char *, int);
 #endif
 
 #ifdef __cplusplus

@@ -8,30 +8,30 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b)        (((a) < (b)) ? (a) : (b))
+#define MAX(a, b)        (((a) > (b)) ? (a) : (b))
 #define CLAMP(x, lo, hi) (((x) > (hi)) ? (hi) : (((x) < (lo)) ? (lo) : (x)))
 
-#define SIGN16(x)   ((int16_t)(x))
-#define SIGN8(x)    ((int8_t)(x))
+#define SIGN16(x) ((int16_t)(x))
+#define SIGN8(x)  ((int8_t)(x))
 
-#define SIGN(x, numb)	(((x) & ((1 << (numb)) - 1)) | -((x) & (1 << ((numb) - 1))))
-#define SIGNF(x, numb)	((x) | -((x) & (1 << ((numb) - 1))))
+#define SIGN(x, numb)  (((x) & ((1 << (numb)) - 1)) | -((x) & (1 << ((numb)-1))))
+#define SIGNF(x, numb) ((x) | -((x) & (1 << ((numb)-1))))
 
-#define TRELATIVE(x, y)     ((x) - ((y) << 3))
+#define TRELATIVE(x, y) ((x) - ((y) << 3))
 
 #define PIXELS_TO_BYTES(pix, siz) (((pix) << (siz)) >> 1)
 
 // RGBA5551 to RGBA8888 helper
 #define RGBA16_R(x) (((x) >> 8) & 0xf8)
-#define RGBA16_G(x) (((x) & 0x7c0) >> 3)
-#define RGBA16_B(x) (((x) & 0x3e) << 2)
+#define RGBA16_G(x) (((x)&0x7c0) >> 3)
+#define RGBA16_B(x) (((x)&0x3e) << 2)
 
 // RGBA8888 helper
 #define RGBA32_R(x) (((x) >> 24) & 0xff)
 #define RGBA32_G(x) (((x) >> 16) & 0xff)
 #define RGBA32_B(x) (((x) >> 8) & 0xff)
-#define RGBA32_A(x) ((x) & 0xff)
+#define RGBA32_A(x) ((x)&0xff)
 
 // maximum number of commands to buffer for parallel processing
 #define CMD_BUFFER_SIZE 1024
@@ -85,14 +85,14 @@
 
 static struct n64video_config config;
 
-static struct
-{
+static struct {
     bool fillmbitcrashes, vbusclock;
 } onetimewarnings;
 
 static int rdp_pipeline_crashed = 0;
 
-static STRICTINLINE int32_t clamp(int32_t value, int32_t min, int32_t max)
+static STRICTINLINE int32_t
+clamp(int32_t value, int32_t min, int32_t max)
 {
     if (value < min)
         return min;
@@ -102,7 +102,8 @@ static STRICTINLINE int32_t clamp(int32_t value, int32_t min, int32_t max)
         return value;
 }
 
-static STRICTINLINE uint32_t irand(uint32_t* state)
+static STRICTINLINE uint32_t
+irand(uint32_t *state)
 {
     *state = *state * 0x343fd + 0x269ec3;
     return ((*state >> 16) & 0x7fff);
@@ -126,7 +127,8 @@ static uint32_t rdp_cmd_len;
 // multithreaded mode
 static bool rdp_cmd_sync[64];
 
-static void cmd_run_buffered(uint32_t worker_id)
+static void
+cmd_run_buffered(uint32_t worker_id)
 {
     uint32_t pos;
     for (pos = 0; pos < rdp_cmd_buf_pos; pos++) {
@@ -134,7 +136,8 @@ static void cmd_run_buffered(uint32_t worker_id)
     }
 }
 
-static void cmd_flush(void)
+static void
+cmd_flush(void)
 {
     // only run if there's something buffered
     if (rdp_cmd_buf_pos) {
@@ -145,14 +148,16 @@ static void cmd_flush(void)
     }
 }
 
-static void cmd_init(void)
+static void
+cmd_init(void)
 {
     rdp_cmd_pos = 0;
     rdp_cmd_id = 0;
     rdp_cmd_len = CMD_MAX_INTS;
 }
 
-void n64video_config_init(struct n64video_config* conf)
+void
+n64video_config_init(struct n64video_config *conf)
 {
     memset(conf, 0, sizeof(*conf));
 
@@ -162,16 +167,18 @@ void n64video_config_init(struct n64video_config* conf)
     conf->vi.interp = VI_INTERP_HYBRID;
 }
 
-static void n64video_init_parallel(uint32_t worker_id)
+static void
+n64video_init_parallel(uint32_t worker_id)
 {
-    struct rdp_state* wstate = &state[worker_id];
+    struct rdp_state *wstate = &state[worker_id];
 
     wstate->stride = parallel_num_workers();
     wstate->offset = worker_id;
     wstate->rseed = wstate->vi_rseed = 3 + worker_id * 13;
 }
 
-void n64video_init(struct n64video_config* _config)
+void
+n64video_init(struct n64video_config *_config)
 {
     if (_config) {
         config = *_config;
@@ -225,16 +232,17 @@ void n64video_init(struct n64video_config* _config)
         // init workers
         parallel_run(n64video_init_parallel);
     } else {
-        struct rdp_state* wstate = &state[0];
+        struct rdp_state *wstate = &state[0];
         wstate->stride = 1;
         wstate->offset = 0;
         wstate->rseed = 3;
     }
 }
 
-void n64video_process_list(void)
+void
+n64video_process_list(void)
 {
-    uint32_t** dp_reg = config.gfx.dp_reg;
+    uint32_t **dp_reg = config.gfx.dp_reg;
     uint32_t dp_current_al = (*dp_reg[DP_CURRENT] & ~7) >> 2;
     uint32_t dp_end_al = (*dp_reg[DP_END] & ~7) >> 2;
 
@@ -247,8 +255,8 @@ void n64video_process_list(void)
     while (dp_end_al - dp_current_al > 0) {
         uint32_t i, toload;
         bool xbus_dma = (*dp_reg[DP_STATUS] & DP_STATUS_XBUS_DMA) != 0;
-        uint32_t* dmem = (uint32_t*)config.gfx.dmem;
-        uint32_t* cmd_buf = rdp_cmd_buf[rdp_cmd_buf_pos];
+        uint32_t *dmem = (uint32_t *)config.gfx.dmem;
+        uint32_t *cmd_buf = rdp_cmd_buf[rdp_cmd_buf_pos];
 
         // when reading the first int, extract the command ID and update the buffer length
         if (rdp_cmd_pos == 0) {
@@ -314,7 +322,8 @@ void n64video_process_list(void)
     *dp_reg[DP_START] = *dp_reg[DP_CURRENT] = *dp_reg[DP_END];
 }
 
-void n64video_close(void)
+void
+n64video_close(void)
 {
     vi_close();
     parallel_close();

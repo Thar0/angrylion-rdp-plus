@@ -17,7 +17,8 @@ GFX_INFO gfx;
 static bool m_warn_hle;
 static char m_screenshot_path[MAX_PATH];
 
-static bool is_valid_ptr(void *ptr, uint32_t bytes)
+static bool
+is_valid_ptr(void *ptr, uint32_t bytes)
 {
     SIZE_T dwSize;
     MEMORY_BASIC_INFORMATION meminfo;
@@ -38,13 +39,14 @@ static bool is_valid_ptr(void *ptr, uint32_t bytes)
     if (bytes > meminfo.RegionSize) {
         return false;
     }
-    if ((uint64_t)((char*)ptr - (char*)meminfo.BaseAddress) > (uint64_t)(meminfo.RegionSize - bytes)) {
+    if ((uint64_t)((char *)ptr - (char *)meminfo.BaseAddress) > (uint64_t)(meminfo.RegionSize - bytes)) {
         return false;
     }
     return true;
 }
 
-static char filter_char(char c)
+static char
+filter_char(char c)
 {
     // only allow valid ASCII chars
     if (c & 0x80) {
@@ -59,7 +61,8 @@ static char filter_char(char c)
     return c;
 }
 
-static char* get_rom_name(void)
+static char *
+get_rom_name(void)
 {
     static char rom_name[128];
 
@@ -97,19 +100,21 @@ static char* get_rom_name(void)
     return rom_name;
 }
 
-static void mi_intr(void)
+static void
+mi_intr(void)
 {
     gfx.CheckInterrupts();
     config_update();
 }
 
-static void write_screenshot(char* path)
+static void
+write_screenshot(char *path)
 {
     struct n64video_frame_buffer fb = { 0 };
     vdac_read(&fb, true);
 
     // prepare bitmap headers
-    BITMAPINFOHEADER ihdr = {0};
+    BITMAPINFOHEADER ihdr = { 0 };
     ihdr.biSize = sizeof(ihdr);
     ihdr.biWidth = fb.width;
     ihdr.biHeight = fb.height;
@@ -117,12 +122,12 @@ static void write_screenshot(char* path)
     ihdr.biBitCount = 32;
     ihdr.biSizeImage = fb.width * fb.height * sizeof(int32_t);
 
-    BITMAPFILEHEADER fhdr = {0};
+    BITMAPFILEHEADER fhdr = { 0 };
     fhdr.bfType = 'B' | ('M' << 8);
     fhdr.bfOffBits = sizeof(fhdr) + sizeof(ihdr) + 10;
     fhdr.bfSize = ihdr.biSizeImage + fhdr.bfOffBits;
 
-    FILE* fp = fopen(path, "wb");
+    FILE *fp = fopen(path, "wb");
 
     if (!fp) {
         msg_warning("Can't open screenshot file %s!", path);
@@ -141,7 +146,7 @@ static void write_screenshot(char* path)
 
     // convert RGBA to BGRA
     for (uint32_t i = 0; i < fb.width * fb.height; i++) {
-        struct n64video_pixel* pixel = &fb.pixels[i];
+        struct n64video_pixel *pixel = &fb.pixels[i];
         uint8_t tmp = pixel->r;
         pixel->r = pixel->b;
         pixel->b = tmp;
@@ -153,7 +158,8 @@ static void write_screenshot(char* path)
     fclose(fp);
 }
 
-EXPORT BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+EXPORT BOOL WINAPI
+DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
     UNUSED(lpvReserved);
     switch (fdwReason) {
@@ -164,9 +170,10 @@ EXPORT BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserv
     return TRUE;
 }
 
-EXPORT void CALL CaptureScreen(char* directory)
+EXPORT void CALL
+CaptureScreen(char *directory)
 {
-    char* rom_name = get_rom_name();
+    char *rom_name = get_rom_name();
 
     for (int32_t i = 0; i < 10000; i++) {
         sprintf(m_screenshot_path, "%s\\%s_%04d.bmp", directory, rom_name, i);
@@ -177,69 +184,77 @@ EXPORT void CALL CaptureScreen(char* directory)
     }
 }
 
-EXPORT void CALL ChangeWindow(void)
+EXPORT void CALL
+ChangeWindow(void)
 {
     screen_toggle_fullscreen();
 }
 
-EXPORT void CALL CloseDLL(void)
+EXPORT void CALL
+CloseDLL(void)
 {
 }
 
-EXPORT void CALL DllAbout(HWND hParent)
+EXPORT void CALL
+DllAbout(HWND hParent)
 {
     UNUSED(hParent);
 
-    msg_warning(
-        CORE_NAME "\n\n"
-        "Branch: " GIT_BRANCH "\n"
-        "Commit hash: " GIT_COMMIT_HASH "\n"
-        "Commit date: " GIT_COMMIT_DATE "\n"
-        "Build date: " __DATE__ " " __TIME__ "\n\n"
-        "https://github.com/ata4/angrylion-rdp-plus"
-    );
+    msg_warning(CORE_NAME "\n\n"
+                          "Branch: " GIT_BRANCH "\n"
+                          "Commit hash: " GIT_COMMIT_HASH "\n"
+                          "Commit date: " GIT_COMMIT_DATE "\n"
+                          "Build date: " __DATE__ " " __TIME__ "\n\n"
+                          "https://github.com/ata4/angrylion-rdp-plus");
 }
 
-EXPORT void CALL DllConfig(HWND hParent)
+EXPORT void CALL
+DllConfig(HWND hParent)
 {
     config_dialog(hParent);
 }
 
-EXPORT void CALL ReadScreen(void **dest, long *width, long *height)
+EXPORT void CALL
+ReadScreen(void **dest, long *width, long *height)
 {
     UNUSED(dest);
     UNUSED(width);
     UNUSED(height);
 }
 
-EXPORT void CALL DrawScreen(void)
+EXPORT void CALL
+DrawScreen(void)
 {
 }
 
-EXPORT void CALL GetDllInfo(PLUGIN_INFO* PluginInfo)
+EXPORT void CALL
+GetDllInfo(PLUGIN_INFO *PluginInfo)
 {
     PluginInfo->Version = 0x0103;
-    PluginInfo->Type  = PLUGIN_TYPE_GFX;
+    PluginInfo->Type = PLUGIN_TYPE_GFX;
     sprintf(PluginInfo->Name, CORE_NAME);
 
     PluginInfo->NormalMemory = TRUE;
     PluginInfo->MemoryBswaped = TRUE;
 }
 
-EXPORT BOOL CALL InitiateGFX(GFX_INFO Gfx_Info)
+EXPORT BOOL CALL
+InitiateGFX(GFX_INFO Gfx_Info)
 {
     gfx = Gfx_Info;
 
     return TRUE;
 }
 
-EXPORT void CALL MoveScreen(int xpos, int ypos)
+EXPORT void CALL
+MoveScreen(int xpos, int ypos)
 {
     UNUSED(xpos);
     UNUSED(ypos);
 }
 
-EXPORT void CALL ProcessDList(void)
+EXPORT void CALL
+ProcessDList(void)
 {
     if (!m_warn_hle) {
         msg_warning("Please disable 'Graphic HLE' in the plugin settings.");
@@ -247,21 +262,24 @@ EXPORT void CALL ProcessDList(void)
     }
 }
 
-EXPORT void CALL ProcessRDPList(void)
+EXPORT void CALL
+ProcessRDPList(void)
 {
     n64video_process_list();
 }
 
-EXPORT void CALL RomClosed(void)
+EXPORT void CALL
+RomClosed(void)
 {
     vdac_close();
     n64video_close();
 }
 
-EXPORT void CALL RomOpen(void)
+EXPORT void CALL
+RomOpen(void)
 {
     config_load();
-    struct n64video_config* config = config_get();
+    struct n64video_config *config = config_get();
 
     config->gfx.rdram = gfx.RDRAM;
     config->gfx.rdram_size = RDRAM_MAX_SIZE;
@@ -274,21 +292,23 @@ EXPORT void CALL RomOpen(void)
     }
 
     config->gfx.dmem = gfx.DMEM;
-    config->gfx.mi_intr_reg = (uint32_t*)gfx.MI_INTR_REG;
+    config->gfx.mi_intr_reg = (uint32_t *)gfx.MI_INTR_REG;
     config->gfx.mi_intr_cb = mi_intr;
 
-    config->gfx.vi_reg = (uint32_t**)&gfx.VI_STATUS_REG;
-    config->gfx.dp_reg = (uint32_t**)&gfx.DPC_START_REG;
+    config->gfx.vi_reg = (uint32_t **)&gfx.VI_STATUS_REG;
+    config->gfx.dp_reg = (uint32_t **)&gfx.DPC_START_REG;
 
     n64video_init(config);
     vdac_init(config);
 }
 
-EXPORT void CALL ShowCFB(void)
+EXPORT void CALL
+ShowCFB(void)
 {
 }
 
-EXPORT void CALL UpdateScreen(void)
+EXPORT void CALL
+UpdateScreen(void)
 {
     struct n64video_frame_buffer fb;
     n64video_update_screen(&fb);
@@ -306,32 +326,38 @@ EXPORT void CALL UpdateScreen(void)
     }
 }
 
-EXPORT void CALL ViStatusChanged(void)
+EXPORT void CALL
+ViStatusChanged(void)
 {
 }
 
-EXPORT void CALL ViWidthChanged(void)
+EXPORT void CALL
+ViWidthChanged(void)
 {
 }
 
-EXPORT void CALL FBWrite(DWORD addr, DWORD val)
+EXPORT void CALL
+FBWrite(DWORD addr, DWORD val)
 {
     UNUSED(addr);
     UNUSED(val);
 }
 
-EXPORT void CALL FBWList(FrameBufferModifyEntry *plist, DWORD size)
+EXPORT void CALL
+FBWList(FrameBufferModifyEntry *plist, DWORD size)
 {
     UNUSED(plist);
     UNUSED(size);
 }
 
-EXPORT void CALL FBRead(DWORD addr)
+EXPORT void CALL
+FBRead(DWORD addr)
 {
     UNUSED(addr);
 }
 
-EXPORT void CALL FBGetFrameBufferInfo(void *pinfo)
+EXPORT void CALL
+FBGetFrameBufferInfo(void *pinfo)
 {
     UNUSED(pinfo);
 }

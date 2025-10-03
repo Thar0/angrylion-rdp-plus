@@ -14,7 +14,7 @@
 extern GFX_INFO gfx;
 
 // default size of the window
-#define WINDOW_DEFAULT_WIDTH 640
+#define WINDOW_DEFAULT_WIDTH  640
 #define WINDOW_DEFAULT_HEIGHT 480
 
 // previous size of the window
@@ -31,7 +31,8 @@ static bool m_fullscreen;
 static bool m_exclusive;
 
 // Win32 helpers
-void win32_client_resize(HWND hWnd, HWND hStatus, int32_t nWidth, int32_t nHeight)
+void
+win32_client_resize(HWND hWnd, HWND hStatus, int32_t nWidth, int32_t nHeight)
 {
     RECT rclient;
     if (!GetClientRect(hWnd, &rclient)) {
@@ -55,7 +56,8 @@ void win32_client_resize(HWND hWnd, HWND hStatus, int32_t nWidth, int32_t nHeigh
     MoveWindow(hWnd, rwin.left, rwin.top, nWidth + pdiff.x, nHeight + pdiff.y, TRUE);
 }
 
-static int TestPointer(const PROC pTest)
+static int
+TestPointer(const PROC pTest)
 {
     if (!pTest) {
         return 0;
@@ -66,7 +68,8 @@ static int TestPointer(const PROC pTest)
     return iTest != 1 && iTest != 2 && iTest != 3 && iTest != -1;
 }
 
-funcptr IntGetProcAddress(const char* name)
+funcptr
+IntGetProcAddress(const char *name)
 {
     PROC pFunc = wglGetProcAddress((LPCSTR)name);
     if (TestPointer(pFunc)) {
@@ -80,7 +83,8 @@ funcptr IntGetProcAddress(const char* name)
     }
 }
 
-void screen_init(struct n64video_config* config)
+void
+screen_init(struct n64video_config *config)
 {
     m_exclusive = config->vi.exclusive;
 
@@ -106,17 +110,32 @@ void screen_init(struct n64video_config* config)
         }
     }
 
-    PIXELFORMATDESCRIPTOR win_pfd = {
-        sizeof(PIXELFORMATDESCRIPTOR), 1,
-        PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER, // Flags
-        PFD_TYPE_RGBA, // The kind of framebuffer. RGBA or palette.
-        32,            // Colordepth of the framebuffer.
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        24, // Number of bits for the depthbuffer
-        8,  // Number of bits for the stencilbuffer
-        0,  // Number of Aux buffers in the framebuffer.
-        PFD_MAIN_PLANE, 0, 0, 0, 0
-    };
+    PIXELFORMATDESCRIPTOR win_pfd = { sizeof(PIXELFORMATDESCRIPTOR),
+                                      1,
+                                      PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER, // Flags
+                                      PFD_TYPE_RGBA, // The kind of framebuffer. RGBA or palette.
+                                      32,            // Colordepth of the framebuffer.
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      24, // Number of bits for the depthbuffer
+                                      8,  // Number of bits for the stencilbuffer
+                                      0,  // Number of Aux buffers in the framebuffer.
+                                      PFD_MAIN_PLANE,
+                                      0,
+                                      0,
+                                      0,
+                                      0 };
 
     m_dc = GetDC(gfx.hWnd);
     if (!m_dc) {
@@ -143,10 +162,8 @@ void screen_init(struct n64video_config* config)
 
     // attributes for a 3.3 core profile without all the legacy stuff
     GLint attribs[] = {
-        WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
-        WGL_CONTEXT_MINOR_VERSION_ARB, 3,
-        WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-        0
+        WGL_CONTEXT_MAJOR_VERSION_ARB,    3, WGL_CONTEXT_MINOR_VERSION_ARB, 3, WGL_CONTEXT_PROFILE_MASK_ARB,
+        WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0
     };
 
     // create the actual context
@@ -161,7 +178,8 @@ void screen_init(struct n64video_config* config)
     wglSwapIntervalEXT(config->vi.vsync ? 1 : 0);
 }
 
-void screen_adjust(int32_t width_out, int32_t height_out, int32_t* width, int32_t* height, int32_t* x, int32_t* y)
+void
+screen_adjust(int32_t width_out, int32_t height_out, int32_t *width, int32_t *height, int32_t *x, int32_t *y)
 {
     UNUSED(width_out);
     UNUSED(height_out);
@@ -210,8 +228,7 @@ void screen_adjust(int32_t width_out, int32_t height_out, int32_t* width, int32_
 
         // only fix size if windowed and not maximized
         if (!m_fullscreen && wndpl.showCmd != SW_MAXIMIZE) {
-            win32_client_resize(gfx.hWnd, gfx.hStatusBar,
-                win_width_tmp, win_height_tmp);
+            win32_client_resize(gfx.hWnd, gfx.hStatusBar, win_width_tmp, win_height_tmp);
         }
     }
 
@@ -221,7 +238,8 @@ void screen_adjust(int32_t width_out, int32_t height_out, int32_t* width, int32_
     *y = win_y;
 }
 
-void screen_update(void)
+void
+screen_update(void)
 {
     // don't render when the window is minimized
     if (!IsIconic(gfx.hWnd)) {
@@ -230,7 +248,8 @@ void screen_update(void)
     }
 }
 
-void screen_toggle_fullscreen(void)
+void
+screen_toggle_fullscreen(void)
 {
     static HMENU old_menu;
     static LONG old_style;
@@ -271,8 +290,7 @@ void screen_toggle_fullscreen(void)
 
         // resize window so it covers the entire virtual screen
         SetWindowPos(gfx.hWnd, HWND_TOP, 0, 0, vs_width, vs_height, SWP_SHOWWINDOW);
-    }
-    else {
+    } else {
         // restore cursor
         ShowCursor(TRUE);
 
@@ -295,7 +313,8 @@ void screen_toggle_fullscreen(void)
     }
 }
 
-void screen_close(void)
+void
+screen_close(void)
 {
     if (m_glrc_core) {
         wglDeleteContext(m_glrc_core);

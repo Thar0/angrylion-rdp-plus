@@ -2,4 +2,5 @@
 
 typedef void (*funcptr)(void);
 
-funcptr IntGetProcAddress(const char* name);
+funcptr
+IntGetProcAddress(const char *name);

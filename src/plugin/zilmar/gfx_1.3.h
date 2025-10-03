@@ -26,66 +26,66 @@ extern "C" {
 #endif
 
 /* Plugin types */
-#define PLUGIN_TYPE_GFX             2
+#define PLUGIN_TYPE_GFX 2
 
-#define EXPORT                      __declspec(dllexport)
-#define CALL                        _cdecl
+#define EXPORT __declspec(dllexport)
+#define CALL   _cdecl
 
 /***** Structures *****/
 typedef struct {
-    WORD Version;        /* Set to 0x0103 */
-    WORD Type;           /* Set to PLUGIN_TYPE_GFX */
-    char Name[100];      /* Name of the DLL */
+    WORD Version;   /* Set to 0x0103 */
+    WORD Type;      /* Set to PLUGIN_TYPE_GFX */
+    char Name[100]; /* Name of the DLL */
 
     /* If DLL supports memory these memory options then set them to TRUE or FALSE
        if it does not support it */
-    BOOL NormalMemory;    /* a normal BYTE array */
-    BOOL MemoryBswaped;  /* a normal BYTE array where the memory has been pre
-                              bswap on a dword (32 bits) boundry */
+    BOOL NormalMemory;  /* a normal BYTE array */
+    BOOL MemoryBswaped; /* a normal BYTE array where the memory has been pre
+                             bswap on a dword (32 bits) boundry */
 } PLUGIN_INFO;
 
 typedef struct {
-    HWND hWnd;          /* Render window */
-    HWND hStatusBar;    /* if render window does not have a status bar then this is NULL */
+    HWND hWnd;       /* Render window */
+    HWND hStatusBar; /* if render window does not have a status bar then this is NULL */
 
-    BOOL MemoryBswaped;    // If this is set to TRUE, then the memory has been pre
-                           //   bswap on a dword (32 bits) boundry
-                           //   eg. the first 8 bytes are stored like this:
-                           //        4 3 2 1   8 7 6 5
+    BOOL MemoryBswaped; // If this is set to TRUE, then the memory has been pre
+                        //   bswap on a dword (32 bits) boundry
+                        //   eg. the first 8 bytes are stored like this:
+                        //        4 3 2 1   8 7 6 5
 
-    BYTE * HEADER;  // This is the rom header (first 40h bytes of the rom
-                    // This will be in the same memory format as the rest of the memory.
-    BYTE * RDRAM;
-    BYTE * DMEM;
-    BYTE * IMEM;
+    BYTE *HEADER; // This is the rom header (first 40h bytes of the rom
+                  // This will be in the same memory format as the rest of the memory.
+    BYTE *RDRAM;
+    BYTE *DMEM;
+    BYTE *IMEM;
 
-    DWORD * MI_INTR_REG;
+    DWORD *MI_INTR_REG;
 
-    DWORD * DPC_START_REG;
-    DWORD * DPC_END_REG;
-    DWORD * DPC_CURRENT_REG;
-    DWORD * DPC_STATUS_REG;
-    DWORD * DPC_CLOCK_REG;
-    DWORD * DPC_BUFBUSY_REG;
-    DWORD * DPC_PIPEBUSY_REG;
-    DWORD * DPC_TMEM_REG;
+    DWORD *DPC_START_REG;
+    DWORD *DPC_END_REG;
+    DWORD *DPC_CURRENT_REG;
+    DWORD *DPC_STATUS_REG;
+    DWORD *DPC_CLOCK_REG;
+    DWORD *DPC_BUFBUSY_REG;
+    DWORD *DPC_PIPEBUSY_REG;
+    DWORD *DPC_TMEM_REG;
 
-    DWORD * VI_STATUS_REG;
-    DWORD * VI_ORIGIN_REG;
-    DWORD * VI_WIDTH_REG;
-    DWORD * VI_INTR_REG;
-    DWORD * VI_V_CURRENT_LINE_REG;
-    DWORD * VI_TIMING_REG;
-    DWORD * VI_V_SYNC_REG;
-    DWORD * VI_H_SYNC_REG;
-    DWORD * VI_LEAP_REG;
-    DWORD * VI_H_START_REG;
-    DWORD * VI_V_START_REG;
-    DWORD * VI_V_BURST_REG;
-    DWORD * VI_X_SCALE_REG;
-    DWORD * VI_Y_SCALE_REG;
+    DWORD *VI_STATUS_REG;
+    DWORD *VI_ORIGIN_REG;
+    DWORD *VI_WIDTH_REG;
+    DWORD *VI_INTR_REG;
+    DWORD *VI_V_CURRENT_LINE_REG;
+    DWORD *VI_TIMING_REG;
+    DWORD *VI_V_SYNC_REG;
+    DWORD *VI_H_SYNC_REG;
+    DWORD *VI_LEAP_REG;
+    DWORD *VI_H_START_REG;
+    DWORD *VI_V_START_REG;
+    DWORD *VI_V_BURST_REG;
+    DWORD *VI_X_SCALE_REG;
+    DWORD *VI_Y_SCALE_REG;
 
-    void (*CheckInterrupts)( void );
+    void (*CheckInterrupts)(void);
 } GFX_INFO;
 
 /******************************************************************
@@ -94,7 +94,8 @@ typedef struct {
   input:    pointer to the directory to save the file to
   output:   none
 *******************************************************************/
-EXPORT void CALL CaptureScreen ( char * Directory );
+EXPORT void CALL
+CaptureScreen(char *Directory);
 
 /******************************************************************
   Function: ChangeWindow
@@ -104,7 +105,8 @@ EXPORT void CALL CaptureScreen ( char * Directory );
   input:    none
   output:   none
 *******************************************************************/
-EXPORT void CALL ChangeWindow (void);
+EXPORT void CALL
+ChangeWindow(void);
 
 /******************************************************************
   Function: CloseDLL
@@ -113,7 +115,8 @@ EXPORT void CALL ChangeWindow (void);
   input:    none
   output:   none
 *******************************************************************/
-EXPORT void CALL CloseDLL (void);
+EXPORT void CALL
+CloseDLL(void);
 
 /******************************************************************
   Function: DllAbout
@@ -122,7 +125,8 @@ EXPORT void CALL CloseDLL (void);
   input:    a handle to the window that calls this function
   output:   none
 *******************************************************************/
-EXPORT void CALL DllAbout ( HWND hParent );
+EXPORT void CALL
+DllAbout(HWND hParent);
 
 /******************************************************************
   Function: DllConfig
@@ -131,7 +135,8 @@ EXPORT void CALL DllAbout ( HWND hParent );
   input:    a handle to the window that calls this function
   output:   none
 *******************************************************************/
-EXPORT void CALL DllConfig ( HWND hParent );
+EXPORT void CALL
+DllConfig(HWND hParent);
 
 /******************************************************************
   Function: DllTest
@@ -140,10 +145,11 @@ EXPORT void CALL DllConfig ( HWND hParent );
   input:    a handle to the window that calls this function
   output:   none
 *******************************************************************/
-EXPORT void CALL DllTest ( HWND hParent );
+EXPORT void CALL
+DllTest(HWND hParent);
 
-
-EXPORT void CALL ReadScreen(void **dest, long *width, long *height);
+EXPORT void CALL
+ReadScreen(void **dest, long *width, long *height);
 
 /******************************************************************
   Function: DrawScreen
@@ -153,7 +159,8 @@ EXPORT void CALL ReadScreen(void **dest, long *width, long *height);
   input:    none
   output:   none
 *******************************************************************/
-EXPORT void CALL DrawScreen (void);
+EXPORT void CALL
+DrawScreen(void);
 
 /******************************************************************
   Function: GetDllInfo
@@ -163,7 +170,8 @@ EXPORT void CALL DrawScreen (void);
             filled by the function. (see def above)
   output:   none
 *******************************************************************/
-EXPORT void CALL GetDllInfo ( PLUGIN_INFO * PluginInfo );
+EXPORT void CALL
+GetDllInfo(PLUGIN_INFO *PluginInfo);
 
 /******************************************************************
   Function: InitiateGFX
@@ -180,7 +188,8 @@ EXPORT void CALL GetDllInfo ( PLUGIN_INFO * PluginInfo );
   and then call the function CheckInterrupts to tell the emulator
   that there is a waiting interrupt.
 *******************************************************************/
-EXPORT BOOL CALL InitiateGFX (GFX_INFO Gfx_Info);
+EXPORT BOOL CALL
+InitiateGFX(GFX_INFO Gfx_Info);
 
 /******************************************************************
   Function: MoveScreen
@@ -193,7 +202,8 @@ EXPORT BOOL CALL InitiateGFX (GFX_INFO Gfx_Info);
             client area of the window.
   output:   none
 *******************************************************************/
-EXPORT void CALL MoveScreen (int xpos, int ypos);
+EXPORT void CALL
+MoveScreen(int xpos, int ypos);
 
 /******************************************************************
   Function: ProcessDList
@@ -202,7 +212,8 @@ EXPORT void CALL MoveScreen (int xpos, int ypos);
   input:    none
   output:   none
 *******************************************************************/
-EXPORT void CALL ProcessDList(void);
+EXPORT void CALL
+ProcessDList(void);
 
 /******************************************************************
   Function: ProcessRDPList
@@ -211,7 +222,8 @@ EXPORT void CALL ProcessDList(void);
   input:    none
   output:   none
 *******************************************************************/
-EXPORT void CALL ProcessRDPList(void);
+EXPORT void CALL
+ProcessRDPList(void);
 
 /******************************************************************
   Function: RomClosed
@@ -219,7 +231,8 @@ EXPORT void CALL ProcessRDPList(void);
   input:    none
   output:   none
 *******************************************************************/
-EXPORT void CALL RomClosed (void);
+EXPORT void CALL
+RomClosed(void);
 
 /******************************************************************
   Function: RomOpen
@@ -228,7 +241,8 @@ EXPORT void CALL RomClosed (void);
   input:    none
   output:   none
 *******************************************************************/
-EXPORT void CALL RomOpen (void);
+EXPORT void CALL
+RomOpen(void);
 
 /******************************************************************
   Function: ShowCFB
@@ -238,7 +252,8 @@ EXPORT void CALL RomOpen (void);
   input:    none
   output:   none
 *******************************************************************/
-EXPORT void CALL ShowCFB (void);
+EXPORT void CALL
+ShowCFB(void);
 
 /******************************************************************
   Function: UpdateScreen
@@ -248,7 +263,8 @@ EXPORT void CALL ShowCFB (void);
   input:    none
   output:   none
 *******************************************************************/
-EXPORT void CALL UpdateScreen (void);
+EXPORT void CALL
+UpdateScreen(void);
 
 /******************************************************************
   Function: ViStatusChanged
@@ -257,7 +273,8 @@ EXPORT void CALL UpdateScreen (void);
   input:    none
   output:   none
 *******************************************************************/
-EXPORT void CALL ViStatusChanged (void);
+EXPORT void CALL
+ViStatusChanged(void);
 
 /******************************************************************
   Function: ViWidthChanged
@@ -266,8 +283,8 @@ EXPORT void CALL ViStatusChanged (void);
   input:    none
   output:   none
 *******************************************************************/
-EXPORT void CALL ViWidthChanged (void);
-
+EXPORT void CALL
+ViWidthChanged(void);
 
 /******************************************************************
   Function: FrameBufferWrite
@@ -280,11 +297,10 @@ EXPORT void CALL ViWidthChanged (void);
 *******************************************************************/
 EXPORT void CALL FBWrite(DWORD, DWORD);
 
-typedef struct
-{
+typedef struct {
     DWORD addr;
     DWORD val;
-    DWORD size;             // 1 = BYTE, 2 = WORD, 4=DWORD
+    DWORD size; // 1 = BYTE, 2 = WORD, 4=DWORD
 } FrameBufferModifyEntry;
 
 /******************************************************************
@@ -295,7 +311,8 @@ typedef struct
             size = size of the plist, max = 1024
   output:   none
 *******************************************************************/
-EXPORT void CALL FBWList(FrameBufferModifyEntry *plist, DWORD size);
+EXPORT void CALL
+FBWList(FrameBufferModifyEntry *plist, DWORD size);
 
 /******************************************************************
   Function: FrameBufferRead
@@ -312,7 +329,8 @@ EXPORT void CALL FBWList(FrameBufferModifyEntry *plist, DWORD size);
             size        1 = BYTE, 2 = WORD, 4 = DWORD
   output:   none
 *******************************************************************/
-EXPORT void CALL FBRead(DWORD addr);
+EXPORT void CALL
+FBRead(DWORD addr);
 
 /************************************************************************
 Function: FBGetFrameBufferInfo
@@ -334,7 +352,8 @@ pinfo is pointed to a FrameBufferInfo structure which to be
 filled in by this function
 output:   Values are return in the FrameBufferInfo structure
 ************************************************************************/
-EXPORT void CALL FBGetFrameBufferInfo(void *pinfo);
+EXPORT void CALL
+FBGetFrameBufferInfo(void *pinfo);
 
 #if defined(__cplusplus)
 }

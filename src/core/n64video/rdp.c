@@ -1,77 +1,71 @@
 #ifdef N64VIDEO_C
 
 // bit constants for DP_STATUS
-#define DP_STATUS_XBUS_DMA      0x001   // DMEM DMA mode is set
-#define DP_STATUS_FREEZE        0x002   // Freeze has been set
-#define DP_STATUS_FLUSH         0x004   // Flush has been set
-#define DP_STATUS_START_GCLK    0x008   // Unknown
-#define DP_STATUS_TMEM_BUSY     0x010   // TMEM is in use on the RDP
-#define DP_STATUS_PIPE_BUSY     0x020   // Graphics pipe is in use on the RDP
-#define DP_STATUS_CMD_BUSY      0x040   // RDP is currently executing a command
-#define DP_STATUS_CBUF_BUSY     0x080   // RDRAM RDP command buffer is in use
-#define DP_STATUS_DMA_BUSY      0x100   // DMEM RDP command buffer is in use
-#define DP_STATUS_END_VALID     0x200   // Unknown
-#define DP_STATUS_START_VALID   0x400   // Unknown
+#define DP_STATUS_XBUS_DMA    0x001 // DMEM DMA mode is set
+#define DP_STATUS_FREEZE      0x002 // Freeze has been set
+#define DP_STATUS_FLUSH       0x004 // Flush has been set
+#define DP_STATUS_START_GCLK  0x008 // Unknown
+#define DP_STATUS_TMEM_BUSY   0x010 // TMEM is in use on the RDP
+#define DP_STATUS_PIPE_BUSY   0x020 // Graphics pipe is in use on the RDP
+#define DP_STATUS_CMD_BUSY    0x040 // RDP is currently executing a command
+#define DP_STATUS_CBUF_BUSY   0x080 // RDRAM RDP command buffer is in use
+#define DP_STATUS_DMA_BUSY    0x100 // DMEM RDP command buffer is in use
+#define DP_STATUS_END_VALID   0x200 // Unknown
+#define DP_STATUS_START_VALID 0x400 // Unknown
 
-#define PIXEL_SIZE_4BIT         0
-#define PIXEL_SIZE_8BIT         1
-#define PIXEL_SIZE_16BIT        2
-#define PIXEL_SIZE_32BIT        3
+#define PIXEL_SIZE_4BIT  0
+#define PIXEL_SIZE_8BIT  1
+#define PIXEL_SIZE_16BIT 2
+#define PIXEL_SIZE_32BIT 3
 
-#define CYCLE_TYPE_1            0
-#define CYCLE_TYPE_2            1
-#define CYCLE_TYPE_COPY         2
-#define CYCLE_TYPE_FILL         3
+#define CYCLE_TYPE_1    0
+#define CYCLE_TYPE_2    1
+#define CYCLE_TYPE_COPY 2
+#define CYCLE_TYPE_FILL 3
 
+#define FORMAT_RGBA 0
+#define FORMAT_YUV  1
+#define FORMAT_CI   2
+#define FORMAT_IA   3
+#define FORMAT_I    4
 
-#define FORMAT_RGBA             0
-#define FORMAT_YUV              1
-#define FORMAT_CI               2
-#define FORMAT_IA               3
-#define FORMAT_I                4
+#define TEXEL_RGBA4  0
+#define TEXEL_RGBA8  1
+#define TEXEL_RGBA16 2
+#define TEXEL_RGBA32 3
+#define TEXEL_YUV4   4
+#define TEXEL_YUV8   5
+#define TEXEL_YUV16  6
+#define TEXEL_YUV32  7
+#define TEXEL_CI4    8
+#define TEXEL_CI8    9
+#define TEXEL_CI16   0xa
+#define TEXEL_CI32   0xb
+#define TEXEL_IA4    0xc
+#define TEXEL_IA8    0xd
+#define TEXEL_IA16   0xe
+#define TEXEL_IA32   0xf
+#define TEXEL_I4     0x10
+#define TEXEL_I8     0x11
+#define TEXEL_I16    0x12
+#define TEXEL_I32    0x13
 
+#define SP_INTERRUPT 0x1
+#define SI_INTERRUPT 0x2
+#define AI_INTERRUPT 0x4
+#define VI_INTERRUPT 0x8
+#define PI_INTERRUPT 0x10
+#define DP_INTERRUPT 0x20
 
-#define TEXEL_RGBA4             0
-#define TEXEL_RGBA8             1
-#define TEXEL_RGBA16            2
-#define TEXEL_RGBA32            3
-#define TEXEL_YUV4              4
-#define TEXEL_YUV8              5
-#define TEXEL_YUV16             6
-#define TEXEL_YUV32             7
-#define TEXEL_CI4               8
-#define TEXEL_CI8               9
-#define TEXEL_CI16              0xa
-#define TEXEL_CI32              0xb
-#define TEXEL_IA4               0xc
-#define TEXEL_IA8               0xd
-#define TEXEL_IA16              0xe
-#define TEXEL_IA32              0xf
-#define TEXEL_I4                0x10
-#define TEXEL_I8                0x11
-#define TEXEL_I16               0x12
-#define TEXEL_I32               0x13
-
-
-#define SP_INTERRUPT    0x1
-#define SI_INTERRUPT    0x2
-#define AI_INTERRUPT    0x4
-#define VI_INTERRUPT    0x8
-#define PI_INTERRUPT    0x10
-#define DP_INTERRUPT    0x20
-
-struct color
-{
+struct color {
     int32_t r, g, b, a;
 };
 
-struct rectangle
-{
+struct rectangle {
     uint16_t xl, yl, xh, yh;
 };
 
-struct other_modes
-{
+struct other_modes {
     int cycle_type;
     int persp_tex_en;
     int detail_tex_en;
@@ -109,8 +103,7 @@ struct other_modes
     int dither_alpha_en;
     int alpha_compare_en;
 
-    struct
-    {
+    struct {
         int stalederivs;
         int dolod;
         int partialreject_1cycle;
@@ -124,8 +117,7 @@ struct other_modes
     } f;
 };
 
-struct spansigs
-{
+struct spansigs {
     int endspan;
     int preendspan;
     int nextspan;
@@ -134,8 +126,7 @@ struct spansigs
     int onelessthanmid;
 };
 
-struct tile
-{
+struct tile {
     int format;
     int size;
     int line;
@@ -146,8 +137,7 @@ struct tile
 
     uint16_t sl, tl, sh, th;
 
-    struct
-    {
+    struct {
         int clampdiffs, clampdifft;
         int clampens, clampent;
         int masksclamped, masktclamped;
@@ -155,8 +145,7 @@ struct tile
     } f;
 };
 
-struct span
-{
+struct span {
     int lx, rx;
     int unscrx;
     int validline;
@@ -166,8 +155,7 @@ struct span
     int32_t invalyscan[4];
 };
 
-struct combiner_inputs
-{
+struct combiner_inputs {
     int sub_a_rgb0;
     int sub_b_rgb0;
     int mul_rgb0;
@@ -187,8 +175,7 @@ struct combiner_inputs
     int add_a1;
 };
 
-struct rdp_state
-{
+struct rdp_state {
     uint32_t stride;
     uint32_t offset;
 
@@ -302,13 +289,14 @@ struct rdp_state
     int32_t keyalpha;
 
     // tcoord
-    void (*tcdiv_ptr)(int32_t, int32_t, int32_t, int32_t*, int32_t*);
+    void (*tcdiv_ptr)(int32_t, int32_t, int32_t, int32_t *, int32_t *);
 
     // fbuffer
-    void (*fbread1_ptr)(struct rdp_state*, uint32_t, uint32_t*);
-    void (*fbread2_ptr)(struct rdp_state*, uint32_t, uint32_t*);
-    void (*fbwrite_ptr)(struct rdp_state*, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, int, int*);
-    void (*fbfill_ptr)(struct rdp_state*, uint32_t, int, int*);
+    void (*fbread1_ptr)(struct rdp_state *, uint32_t, uint32_t *);
+    void (*fbread2_ptr)(struct rdp_state *, uint32_t, uint32_t *);
+    void (*fbwrite_ptr)(struct rdp_state *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, int,
+                        int *);
+    void (*fbfill_ptr)(struct rdp_state *, uint32_t, int, int *);
 
     int fb_format;
     int fb_size;
@@ -352,120 +340,159 @@ struct rdp_state state[PARALLEL_MAX_WORKERS];
 static int32_t one_color = 0x100;
 static int32_t zero_color = 0x00;
 
-void rdp_init(struct rdp_state* wstate);
-void rdp_invalid(struct rdp_state* wstate, const uint32_t* args);
-void rdp_noop(struct rdp_state* wstate, const uint32_t* args);
-void rdp_tri_noshade(struct rdp_state* wstate, const uint32_t* args);
-void rdp_tri_noshade_z(struct rdp_state* wstate, const uint32_t* args);
-void rdp_tri_tex(struct rdp_state* wstate, const uint32_t* args);
-void rdp_tri_tex_z(struct rdp_state* wstate, const uint32_t* args);
-void rdp_tri_shade(struct rdp_state* wstate, const uint32_t* args);
-void rdp_tri_shade_z(struct rdp_state* wstate, const uint32_t* args);
-void rdp_tri_texshade(struct rdp_state* wstate, const uint32_t* args);
-void rdp_tri_texshade_z(struct rdp_state* wstate, const uint32_t* args);
-void rdp_tex_rect(struct rdp_state* wstate, const uint32_t* args);
-void rdp_tex_rect_flip(struct rdp_state* wstate, const uint32_t* args);
-void rdp_sync_load(struct rdp_state* wstate, const uint32_t* args);
-void rdp_sync_pipe(struct rdp_state* wstate, const uint32_t* args);
-void rdp_sync_tile(struct rdp_state* wstate, const uint32_t* args);
-void rdp_sync_full(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_key_gb(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_key_r(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_convert(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_scissor(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_prim_depth(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_other_modes(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_tile_size(struct rdp_state* wstate, const uint32_t* args);
-void rdp_load_block(struct rdp_state* wstate, const uint32_t* args);
-void rdp_load_tlut(struct rdp_state* wstate, const uint32_t* args);
-void rdp_load_tile(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_tile(struct rdp_state* wstate, const uint32_t* args);
-void rdp_fill_rect(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_fill_color(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_fog_color(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_blend_color(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_prim_color(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_env_color(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_combine(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_texture_image(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_mask_image(struct rdp_state* wstate, const uint32_t* args);
-void rdp_set_color_image(struct rdp_state* wstate, const uint32_t* args);
-void rdp_cmd(struct rdp_state* wstate, const uint32_t* args);
+void
+rdp_init(struct rdp_state *wstate);
+void
+rdp_invalid(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_noop(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_tri_noshade(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_tri_noshade_z(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_tri_tex(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_tri_tex_z(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_tri_shade(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_tri_shade_z(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_tri_texshade(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_tri_texshade_z(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_tex_rect(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_tex_rect_flip(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_sync_load(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_sync_pipe(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_sync_tile(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_sync_full(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_key_gb(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_key_r(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_convert(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_scissor(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_prim_depth(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_other_modes(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_tile_size(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_load_block(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_load_tlut(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_load_tile(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_tile(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_fill_rect(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_fill_color(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_fog_color(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_blend_color(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_prim_color(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_env_color(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_combine(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_texture_image(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_mask_image(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_set_color_image(struct rdp_state *wstate, const uint32_t *args);
+void
+rdp_cmd(struct rdp_state *wstate, const uint32_t *args);
 
-static const struct
-{
+static const struct {
     // command handler function pointer
-    void (*handler)(struct rdp_state* wstate, const uint32_t*);
+    void (*handler)(struct rdp_state *wstate, const uint32_t *);
     // command data length in bytes
     uint32_t length;
 } rdp_commands[] = {
-    {rdp_noop,                8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_tri_noshade,        32},
-    {rdp_tri_noshade_z,      48},
-    {rdp_tri_tex,            96},
-    {rdp_tri_tex_z,         112},
-    {rdp_tri_shade,          96},
-    {rdp_tri_shade_z,       112},
-    {rdp_tri_texshade,      160},
-    {rdp_tri_texshade_z,    176},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_invalid,             8},
-    {rdp_tex_rect,           16},
-    {rdp_tex_rect_flip,      16},
-    {rdp_sync_load,           8},
-    {rdp_sync_pipe,           8},
-    {rdp_sync_tile,           8},
-    {rdp_sync_full,           8},
-    {rdp_set_key_gb,          8},
-    {rdp_set_key_r,           8},
-    {rdp_set_convert,         8},
-    {rdp_set_scissor,         8},
-    {rdp_set_prim_depth,      8},
-    {rdp_set_other_modes,     8},
-    {rdp_load_tlut,           8},
-    {rdp_invalid,             8},
-    {rdp_set_tile_size,       8},
-    {rdp_load_block,          8},
-    {rdp_load_tile,           8},
-    {rdp_set_tile,            8},
-    {rdp_fill_rect,           8},
-    {rdp_set_fill_color,      8},
-    {rdp_set_fog_color,       8},
-    {rdp_set_blend_color,     8},
-    {rdp_set_prim_color,      8},
-    {rdp_set_env_color,       8},
-    {rdp_set_combine,         8},
-    {rdp_set_texture_image,   8},
-    {rdp_set_mask_image,      8},
-    {rdp_set_color_image,     8}
+    {rdp_noop,               8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_tri_noshade,       32 },
+    { rdp_tri_noshade_z,     48 },
+    { rdp_tri_tex,           96 },
+    { rdp_tri_tex_z,         112},
+    { rdp_tri_shade,         96 },
+    { rdp_tri_shade_z,       112},
+    { rdp_tri_texshade,      160},
+    { rdp_tri_texshade_z,    176},
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_invalid,           8  },
+    { rdp_tex_rect,          16 },
+    { rdp_tex_rect_flip,     16 },
+    { rdp_sync_load,         8  },
+    { rdp_sync_pipe,         8  },
+    { rdp_sync_tile,         8  },
+    { rdp_sync_full,         8  },
+    { rdp_set_key_gb,        8  },
+    { rdp_set_key_r,         8  },
+    { rdp_set_convert,       8  },
+    { rdp_set_scissor,       8  },
+    { rdp_set_prim_depth,    8  },
+    { rdp_set_other_modes,   8  },
+    { rdp_load_tlut,         8  },
+    { rdp_invalid,           8  },
+    { rdp_set_tile_size,     8  },
+    { rdp_load_block,        8  },
+    { rdp_load_tile,         8  },
+    { rdp_set_tile,          8  },
+    { rdp_fill_rect,         8  },
+    { rdp_set_fill_color,    8  },
+    { rdp_set_fog_color,     8  },
+    { rdp_set_blend_color,   8  },
+    { rdp_set_prim_color,    8  },
+    { rdp_set_env_color,     8  },
+    { rdp_set_combine,       8  },
+    { rdp_set_texture_image, 8  },
+    { rdp_set_mask_image,    8  },
+    { rdp_set_color_image,   8  }
 };
 
-static void deduce_derivatives(struct rdp_state* wstate);
+static void
+deduce_derivatives(struct rdp_state *wstate);
 
 #include "rdp/rdram.c"
 #include "rdp/dither.c"
@@ -479,29 +506,32 @@ static void deduce_derivatives(struct rdp_state* wstate);
 #include "rdp/tex.c"
 #include "rdp/rasterizer.c"
 
-static void deduce_derivatives(struct rdp_state* wstate)
+static void
+deduce_derivatives(struct rdp_state *wstate)
 {
     int special_bsel0, special_bsel1;
 
-
-    wstate->other_modes.f.partialreject_1cycle = (wstate->blender2b_a[0] == &wstate->inv_pixel_color.a && wstate->blender1b_a[0] == &wstate->pixel_color.a);
-    wstate->other_modes.f.partialreject_2cycle = (wstate->blender2b_a[1] == &wstate->inv_pixel_color.a && wstate->blender1b_a[1] == &wstate->pixel_color.a);
-
+    wstate->other_modes.f.partialreject_1cycle =
+        (wstate->blender2b_a[0] == &wstate->inv_pixel_color.a && wstate->blender1b_a[0] == &wstate->pixel_color.a);
+    wstate->other_modes.f.partialreject_2cycle =
+        (wstate->blender2b_a[1] == &wstate->inv_pixel_color.a && wstate->blender1b_a[1] == &wstate->pixel_color.a);
 
     special_bsel0 = (wstate->blender2b_a[0] == &wstate->memory_color.a);
     special_bsel1 = (wstate->blender2b_a[1] == &wstate->memory_color.a);
 
+    wstate->other_modes.f.realblendershiftersneeded =
+        (special_bsel0 && wstate->other_modes.cycle_type == CYCLE_TYPE_1) ||
+        (special_bsel1 && wstate->other_modes.cycle_type == CYCLE_TYPE_2);
+    wstate->other_modes.f.interpixelblendershiftersneeded =
+        (special_bsel0 && wstate->other_modes.cycle_type == CYCLE_TYPE_2);
 
-    wstate->other_modes.f.realblendershiftersneeded = (special_bsel0 && wstate->other_modes.cycle_type == CYCLE_TYPE_1) || (special_bsel1 && wstate->other_modes.cycle_type == CYCLE_TYPE_2);
-    wstate->other_modes.f.interpixelblendershiftersneeded = (special_bsel0 && wstate->other_modes.cycle_type == CYCLE_TYPE_2);
-
-    wstate->other_modes.f.rgb_alpha_dither = (wstate->other_modes.rgb_dither_sel << 2) | wstate->other_modes.alpha_dither_sel;
+    wstate->other_modes.f.rgb_alpha_dither =
+        (wstate->other_modes.rgb_dither_sel << 2) | wstate->other_modes.alpha_dither_sel;
 
     wstate->tcdiv_ptr = tcdiv_func[wstate->other_modes.persp_tex_en];
 
-
     int texel1_used_in_cc1 = 0, texel0_used_in_cc1 = 0, texel0_used_in_cc0 = 0, texel1_used_in_cc0 = 0;
-    //int texels_in_cc0 = 0, texels_in_cc1 = 0;
+    // int texels_in_cc0 = 0, texels_in_cc1 = 0;
     int lod_frac_used_in_cc1 = 0, lod_frac_used_in_cc0 = 0;
     int texels_or_lf_used_in_ac0 = 0, texel0_used_in_ac0 = 0, texel1_used_in_ac0 = 0;
 
@@ -510,28 +540,52 @@ static void deduce_derivatives(struct rdp_state* wstate)
     if ((wstate->combiner_rgbmul_r[0] == &wstate->lod_frac) || (wstate->combiner_alphamul[0] == &wstate->lod_frac))
         lod_frac_used_in_cc0 = 1;
 
-    if (wstate->combiner_rgbmul_r[1] == &wstate->texel1_color.r || wstate->combiner_rgbsub_a_r[1] == &wstate->texel1_color.r || wstate->combiner_rgbsub_b_r[1] == &wstate->texel1_color.r || wstate->combiner_rgbadd_r[1] == &wstate->texel1_color.r || \
-        wstate->combiner_alphamul[1] == &wstate->texel1_color.a || wstate->combiner_alphasub_a[1] == &wstate->texel1_color.a || wstate->combiner_alphasub_b[1] == &wstate->texel1_color.a || wstate->combiner_alphaadd[1] == &wstate->texel1_color.a || \
+    if (wstate->combiner_rgbmul_r[1] == &wstate->texel1_color.r ||
+        wstate->combiner_rgbsub_a_r[1] == &wstate->texel1_color.r ||
+        wstate->combiner_rgbsub_b_r[1] == &wstate->texel1_color.r ||
+        wstate->combiner_rgbadd_r[1] == &wstate->texel1_color.r ||
+        wstate->combiner_alphamul[1] == &wstate->texel1_color.a ||
+        wstate->combiner_alphasub_a[1] == &wstate->texel1_color.a ||
+        wstate->combiner_alphasub_b[1] == &wstate->texel1_color.a ||
+        wstate->combiner_alphaadd[1] == &wstate->texel1_color.a ||
         wstate->combiner_rgbmul_r[1] == &wstate->texel1_color.a)
         texel1_used_in_cc1 = 1;
-    if (wstate->combiner_rgbmul_r[1] == &wstate->texel0_color.r || wstate->combiner_rgbsub_a_r[1] == &wstate->texel0_color.r || wstate->combiner_rgbsub_b_r[1] == &wstate->texel0_color.r || wstate->combiner_rgbadd_r[1] == &wstate->texel0_color.r || \
-        wstate->combiner_alphamul[1] == &wstate->texel0_color.a || wstate->combiner_alphasub_a[1] == &wstate->texel0_color.a || wstate->combiner_alphasub_b[1] == &wstate->texel0_color.a || wstate->combiner_alphaadd[1] == &wstate->texel0_color.a || \
+    if (wstate->combiner_rgbmul_r[1] == &wstate->texel0_color.r ||
+        wstate->combiner_rgbsub_a_r[1] == &wstate->texel0_color.r ||
+        wstate->combiner_rgbsub_b_r[1] == &wstate->texel0_color.r ||
+        wstate->combiner_rgbadd_r[1] == &wstate->texel0_color.r ||
+        wstate->combiner_alphamul[1] == &wstate->texel0_color.a ||
+        wstate->combiner_alphasub_a[1] == &wstate->texel0_color.a ||
+        wstate->combiner_alphasub_b[1] == &wstate->texel0_color.a ||
+        wstate->combiner_alphaadd[1] == &wstate->texel0_color.a ||
         wstate->combiner_rgbmul_r[1] == &wstate->texel0_color.a)
         texel0_used_in_cc1 = 1;
-    if (wstate->combiner_alphamul[0] == &wstate->texel1_color.a || wstate->combiner_alphasub_a[0] == &wstate->texel1_color.a || wstate->combiner_alphasub_b[0] == &wstate->texel1_color.a || wstate->combiner_alphaadd[0] == &wstate->texel1_color.a)
+    if (wstate->combiner_alphamul[0] == &wstate->texel1_color.a ||
+        wstate->combiner_alphasub_a[0] == &wstate->texel1_color.a ||
+        wstate->combiner_alphasub_b[0] == &wstate->texel1_color.a ||
+        wstate->combiner_alphaadd[0] == &wstate->texel1_color.a)
         texel1_used_in_ac0 = 1;
-    if (wstate->combiner_alphamul[0] == &wstate->texel0_color.a || wstate->combiner_alphasub_a[0] == &wstate->texel0_color.a || wstate->combiner_alphasub_b[0] == &wstate->texel0_color.a || wstate->combiner_alphaadd[0] == &wstate->texel0_color.a)
+    if (wstate->combiner_alphamul[0] == &wstate->texel0_color.a ||
+        wstate->combiner_alphasub_a[0] == &wstate->texel0_color.a ||
+        wstate->combiner_alphasub_b[0] == &wstate->texel0_color.a ||
+        wstate->combiner_alphaadd[0] == &wstate->texel0_color.a)
         texel0_used_in_ac0 = 1;
-    if (wstate->combiner_rgbmul_r[0] == &wstate->texel1_color.r || wstate->combiner_rgbsub_a_r[0] == &wstate->texel1_color.r || wstate->combiner_rgbsub_b_r[0] == &wstate->texel1_color.r || wstate->combiner_rgbadd_r[0] == &wstate->texel1_color.r || \
-        texel1_used_in_ac0 || wstate->combiner_rgbmul_r[0] == &wstate->texel1_color.a)
+    if (wstate->combiner_rgbmul_r[0] == &wstate->texel1_color.r ||
+        wstate->combiner_rgbsub_a_r[0] == &wstate->texel1_color.r ||
+        wstate->combiner_rgbsub_b_r[0] == &wstate->texel1_color.r ||
+        wstate->combiner_rgbadd_r[0] == &wstate->texel1_color.r || texel1_used_in_ac0 ||
+        wstate->combiner_rgbmul_r[0] == &wstate->texel1_color.a)
         texel1_used_in_cc0 = 1;
-    if (wstate->combiner_rgbmul_r[0] == &wstate->texel0_color.r || wstate->combiner_rgbsub_a_r[0] == &wstate->texel0_color.r || wstate->combiner_rgbsub_b_r[0] == &wstate->texel0_color.r || wstate->combiner_rgbadd_r[0] == &wstate->texel0_color.r || \
-        texel0_used_in_ac0 || wstate->combiner_rgbmul_r[0] == &wstate->texel0_color.a)
+    if (wstate->combiner_rgbmul_r[0] == &wstate->texel0_color.r ||
+        wstate->combiner_rgbsub_a_r[0] == &wstate->texel0_color.r ||
+        wstate->combiner_rgbsub_b_r[0] == &wstate->texel0_color.r ||
+        wstate->combiner_rgbadd_r[0] == &wstate->texel0_color.r || texel0_used_in_ac0 ||
+        wstate->combiner_rgbmul_r[0] == &wstate->texel0_color.a)
         texel0_used_in_cc0 = 1;
-    texels_or_lf_used_in_ac0 = texel0_used_in_ac0 || texel1_used_in_ac0 || (wstate->combiner_alphamul[0] == &wstate->lod_frac);
-    //texels_in_cc0 = texel0_used_in_cc0 || texel1_used_in_cc0;
-    //texels_in_cc1 = texel0_used_in_cc1 || texel1_used_in_cc1;
-
+    texels_or_lf_used_in_ac0 =
+        texel0_used_in_ac0 || texel1_used_in_ac0 || (wstate->combiner_alphamul[0] == &wstate->lod_frac);
+    // texels_in_cc0 = texel0_used_in_cc0 || texel1_used_in_cc0;
+    // texels_in_cc1 = texel0_used_in_cc1 || texel1_used_in_cc1;
 
     if (texel1_used_in_cc1)
         wstate->other_modes.f.textureuselevel0 = 0;
@@ -549,15 +603,15 @@ static void deduce_derivatives(struct rdp_state* wstate)
     else
         wstate->other_modes.f.textureuselevel1 = 3;
 
-
     int lodfracused = 0;
 
-    if ((wstate->other_modes.cycle_type == CYCLE_TYPE_2 && (lod_frac_used_in_cc0 || lod_frac_used_in_cc1)) || \
+    if ((wstate->other_modes.cycle_type == CYCLE_TYPE_2 && (lod_frac_used_in_cc0 || lod_frac_used_in_cc1)) ||
         (wstate->other_modes.cycle_type == CYCLE_TYPE_1 && lod_frac_used_in_cc1))
         lodfracused = 1;
 
-    if ((wstate->other_modes.cycle_type == CYCLE_TYPE_1 && wstate->combiner_rgbsub_a_r[1] == &wstate->noise) || \
-        (wstate->other_modes.cycle_type == CYCLE_TYPE_2 && (wstate->combiner_rgbsub_a_r[0] == &wstate->noise || wstate->combiner_rgbsub_a_r[1] == &wstate->noise)) || \
+    if ((wstate->other_modes.cycle_type == CYCLE_TYPE_1 && wstate->combiner_rgbsub_a_r[1] == &wstate->noise) ||
+        (wstate->other_modes.cycle_type == CYCLE_TYPE_2 &&
+         (wstate->combiner_rgbsub_a_r[0] == &wstate->noise || wstate->combiner_rgbsub_a_r[1] == &wstate->noise)) ||
         wstate->other_modes.alpha_dither_sel == 2)
         wstate->other_modes.f.getditherlevel = 0;
     else if (wstate->other_modes.f.rgb_alpha_dither != 0xf)
@@ -568,7 +622,8 @@ static void deduce_derivatives(struct rdp_state* wstate)
     wstate->other_modes.f.dolod = wstate->other_modes.tex_lod_en || lodfracused;
 }
 
-void rdp_init(struct rdp_state* wstate)
+void
+rdp_init(struct rdp_state *wstate)
 {
     memset(wstate, 0, sizeof(*wstate));
     fb_init(wstate);
@@ -580,37 +635,43 @@ void rdp_init(struct rdp_state* wstate)
     rdp_set_other_modes(wstate, tmp);
 }
 
-void rdp_invalid(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_invalid(struct rdp_state *wstate, const uint32_t *args)
 {
     UNUSED(wstate);
     UNUSED(args);
 }
 
-void rdp_noop(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_noop(struct rdp_state *wstate, const uint32_t *args)
 {
     UNUSED(wstate);
     UNUSED(args);
 }
 
-void rdp_sync_load(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_sync_load(struct rdp_state *wstate, const uint32_t *args)
 {
     UNUSED(wstate);
     UNUSED(args);
 }
 
-void rdp_sync_pipe(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_sync_pipe(struct rdp_state *wstate, const uint32_t *args)
 {
     UNUSED(wstate);
     UNUSED(args);
 }
 
-void rdp_sync_tile(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_sync_tile(struct rdp_state *wstate, const uint32_t *args)
 {
     UNUSED(wstate);
     UNUSED(args);
 }
 
-void rdp_sync_full(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_sync_full(struct rdp_state *wstate, const uint32_t *args)
 {
     UNUSED(wstate);
     UNUSED(args);
@@ -620,58 +681,60 @@ void rdp_sync_full(struct rdp_state* wstate, const uint32_t* args)
     config.gfx.mi_intr_cb();
 }
 
-void rdp_set_other_modes(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_set_other_modes(struct rdp_state *wstate, const uint32_t *args)
 {
-    wstate->other_modes.cycle_type          = (args[0] >> 20) & 3;
-    wstate->other_modes.persp_tex_en        = (args[0] >> 19) & 1;
-    wstate->other_modes.detail_tex_en       = (args[0] >> 18) & 1;
-    wstate->other_modes.sharpen_tex_en      = (args[0] >> 17) & 1;
-    wstate->other_modes.tex_lod_en          = (args[0] >> 16) & 1;
-    wstate->other_modes.en_tlut             = (args[0] >> 15) & 1;
-    wstate->other_modes.tlut_type           = (args[0] >> 14) & 1;
-    wstate->other_modes.sample_type         = (args[0] >> 13) & 1;
-    wstate->other_modes.mid_texel           = (args[0] >> 12) & 1;
-    wstate->other_modes.bi_lerp0            = (args[0] >> 11) & 1;
-    wstate->other_modes.bi_lerp1            = (args[0] >> 10) & 1;
-    wstate->other_modes.convert_one         = (args[0] >>  9) & 1;
-    wstate->other_modes.key_en              = (args[0] >>  8) & 1;
-    wstate->other_modes.rgb_dither_sel      = (args[0] >>  6) & 3;
-    wstate->other_modes.alpha_dither_sel    = (args[0] >>  4) & 3;
-    wstate->other_modes.blend_m1a_0         = (args[1] >> 30) & 3;
-    wstate->other_modes.blend_m1a_1         = (args[1] >> 28) & 3;
-    wstate->other_modes.blend_m1b_0         = (args[1] >> 26) & 3;
-    wstate->other_modes.blend_m1b_1         = (args[1] >> 24) & 3;
-    wstate->other_modes.blend_m2a_0         = (args[1] >> 22) & 3;
-    wstate->other_modes.blend_m2a_1         = (args[1] >> 20) & 3;
-    wstate->other_modes.blend_m2b_0         = (args[1] >> 18) & 3;
-    wstate->other_modes.blend_m2b_1         = (args[1] >> 16) & 3;
-    wstate->other_modes.force_blend         = (args[1] >> 14) & 1;
-    wstate->other_modes.alpha_cvg_select    = (args[1] >> 13) & 1;
-    wstate->other_modes.cvg_times_alpha     = (args[1] >> 12) & 1;
-    wstate->other_modes.z_mode              = (args[1] >> 10) & 3;
-    wstate->other_modes.cvg_dest            = (args[1] >>  8) & 3;
-    wstate->other_modes.color_on_cvg        = (args[1] >>  7) & 1;
-    wstate->other_modes.image_read_en       = (args[1] >>  6) & 1;
-    wstate->other_modes.z_update_en         = (args[1] >>  5) & 1;
-    wstate->other_modes.z_compare_en        = (args[1] >>  4) & 1;
-    wstate->other_modes.antialias_en        = (args[1] >>  3) & 1;
-    wstate->other_modes.z_source_sel        = (args[1] >>  2) & 1;
-    wstate->other_modes.dither_alpha_en     = (args[1] >>  1) & 1;
-    wstate->other_modes.alpha_compare_en    = (args[1] >>  0) & 1;
+    wstate->other_modes.cycle_type = (args[0] >> 20) & 3;
+    wstate->other_modes.persp_tex_en = (args[0] >> 19) & 1;
+    wstate->other_modes.detail_tex_en = (args[0] >> 18) & 1;
+    wstate->other_modes.sharpen_tex_en = (args[0] >> 17) & 1;
+    wstate->other_modes.tex_lod_en = (args[0] >> 16) & 1;
+    wstate->other_modes.en_tlut = (args[0] >> 15) & 1;
+    wstate->other_modes.tlut_type = (args[0] >> 14) & 1;
+    wstate->other_modes.sample_type = (args[0] >> 13) & 1;
+    wstate->other_modes.mid_texel = (args[0] >> 12) & 1;
+    wstate->other_modes.bi_lerp0 = (args[0] >> 11) & 1;
+    wstate->other_modes.bi_lerp1 = (args[0] >> 10) & 1;
+    wstate->other_modes.convert_one = (args[0] >> 9) & 1;
+    wstate->other_modes.key_en = (args[0] >> 8) & 1;
+    wstate->other_modes.rgb_dither_sel = (args[0] >> 6) & 3;
+    wstate->other_modes.alpha_dither_sel = (args[0] >> 4) & 3;
+    wstate->other_modes.blend_m1a_0 = (args[1] >> 30) & 3;
+    wstate->other_modes.blend_m1a_1 = (args[1] >> 28) & 3;
+    wstate->other_modes.blend_m1b_0 = (args[1] >> 26) & 3;
+    wstate->other_modes.blend_m1b_1 = (args[1] >> 24) & 3;
+    wstate->other_modes.blend_m2a_0 = (args[1] >> 22) & 3;
+    wstate->other_modes.blend_m2a_1 = (args[1] >> 20) & 3;
+    wstate->other_modes.blend_m2b_0 = (args[1] >> 18) & 3;
+    wstate->other_modes.blend_m2b_1 = (args[1] >> 16) & 3;
+    wstate->other_modes.force_blend = (args[1] >> 14) & 1;
+    wstate->other_modes.alpha_cvg_select = (args[1] >> 13) & 1;
+    wstate->other_modes.cvg_times_alpha = (args[1] >> 12) & 1;
+    wstate->other_modes.z_mode = (args[1] >> 10) & 3;
+    wstate->other_modes.cvg_dest = (args[1] >> 8) & 3;
+    wstate->other_modes.color_on_cvg = (args[1] >> 7) & 1;
+    wstate->other_modes.image_read_en = (args[1] >> 6) & 1;
+    wstate->other_modes.z_update_en = (args[1] >> 5) & 1;
+    wstate->other_modes.z_compare_en = (args[1] >> 4) & 1;
+    wstate->other_modes.antialias_en = (args[1] >> 3) & 1;
+    wstate->other_modes.z_source_sel = (args[1] >> 2) & 1;
+    wstate->other_modes.dither_alpha_en = (args[1] >> 1) & 1;
+    wstate->other_modes.alpha_compare_en = (args[1] >> 0) & 1;
 
-    set_blender_input(wstate, 0, 0, &wstate->blender1a_r[0], &wstate->blender1a_g[0], &wstate->blender1a_b[0], &wstate->blender1b_a[0],
-                      wstate->other_modes.blend_m1a_0, wstate->other_modes.blend_m1b_0);
-    set_blender_input(wstate, 0, 1, &wstate->blender2a_r[0], &wstate->blender2a_g[0], &wstate->blender2a_b[0], &wstate->blender2b_a[0],
-                      wstate->other_modes.blend_m2a_0, wstate->other_modes.blend_m2b_0);
-    set_blender_input(wstate, 1, 0, &wstate->blender1a_r[1], &wstate->blender1a_g[1], &wstate->blender1a_b[1], &wstate->blender1b_a[1],
-                      wstate->other_modes.blend_m1a_1, wstate->other_modes.blend_m1b_1);
-    set_blender_input(wstate, 1, 1, &wstate->blender2a_r[1], &wstate->blender2a_g[1], &wstate->blender2a_b[1], &wstate->blender2b_a[1],
-                      wstate->other_modes.blend_m2a_1, wstate->other_modes.blend_m2b_1);
+    set_blender_input(wstate, 0, 0, &wstate->blender1a_r[0], &wstate->blender1a_g[0], &wstate->blender1a_b[0],
+                      &wstate->blender1b_a[0], wstate->other_modes.blend_m1a_0, wstate->other_modes.blend_m1b_0);
+    set_blender_input(wstate, 0, 1, &wstate->blender2a_r[0], &wstate->blender2a_g[0], &wstate->blender2a_b[0],
+                      &wstate->blender2b_a[0], wstate->other_modes.blend_m2a_0, wstate->other_modes.blend_m2b_0);
+    set_blender_input(wstate, 1, 0, &wstate->blender1a_r[1], &wstate->blender1a_g[1], &wstate->blender1a_b[1],
+                      &wstate->blender1b_a[1], wstate->other_modes.blend_m1a_1, wstate->other_modes.blend_m1b_1);
+    set_blender_input(wstate, 1, 1, &wstate->blender2a_r[1], &wstate->blender2a_g[1], &wstate->blender2a_b[1],
+                      &wstate->blender2b_a[1], wstate->other_modes.blend_m2a_1, wstate->other_modes.blend_m2b_1);
 
     wstate->other_modes.f.stalederivs = 1;
 }
 
-void rdp_cmd(struct rdp_state* wstate, const uint32_t* args)
+void
+rdp_cmd(struct rdp_state *wstate, const uint32_t *args)
 {
     uint32_t cmd_id = CMD_ID(args);
     rdp_commands[cmd_id].handler(wstate, args);

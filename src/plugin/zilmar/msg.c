@@ -8,7 +8,8 @@
 
 #define MSG_BUFFER_LEN 256
 
-void msg_error(const char * err, ...)
+void
+msg_error(const char *err, ...)
 {
     va_list arg;
     va_start(arg, err);
@@ -19,7 +20,8 @@ void msg_error(const char * err, ...)
     exit(0);
 }
 
-void msg_warning(const char* err, ...)
+void
+msg_warning(const char *err, ...)
 {
     va_list arg;
     va_start(arg, err);
@@ -29,7 +31,8 @@ void msg_warning(const char* err, ...)
     va_end(arg);
 }
 
-void msg_debug(const char* err, ...)
+void
+msg_debug(const char *err, ...)
 {
     va_list arg;
     va_start(arg, err);

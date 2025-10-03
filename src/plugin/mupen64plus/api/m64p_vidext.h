@@ -41,7 +41,8 @@ extern "C" {
  */
 typedef m64p_error (*ptr_VidExt_Init)(void);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL VidExt_Init(void);
+EXPORT m64p_error CALL
+VidExt_Init(void);
 #endif
 
 /* VidExt_Quit()
@@ -53,7 +54,8 @@ EXPORT m64p_error CALL VidExt_Init(void);
  */
 typedef m64p_error (*ptr_VidExt_Quit)(void);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL VidExt_Quit(void);
+EXPORT m64p_error CALL
+VidExt_Quit(void);
 #endif
 
 /* VidExt_ListFullscreenModes()
@@ -64,7 +66,8 @@ EXPORT m64p_error CALL VidExt_Quit(void);
  */
 typedef m64p_error (*ptr_VidExt_ListFullscreenModes)(m64p_2d_size *, int *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL VidExt_ListFullscreenModes(m64p_2d_size *, int *);
+EXPORT m64p_error CALL
+VidExt_ListFullscreenModes(m64p_2d_size *, int *);
 #endif
 
 /* VidExt_SetVideoMode()
@@ -75,7 +78,8 @@ EXPORT m64p_error CALL VidExt_ListFullscreenModes(m64p_2d_size *, int *);
  */
 typedef m64p_error (*ptr_VidExt_SetVideoMode)(int, int, int, m64p_video_mode, m64p_video_flags);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL VidExt_SetVideoMode(int, int, int, m64p_video_mode, m64p_video_flags);
+EXPORT m64p_error CALL
+VidExt_SetVideoMode(int, int, int, m64p_video_mode, m64p_video_flags);
 #endif
 
 /* VidExt_ResizeWindow()
@@ -84,7 +88,8 @@ EXPORT m64p_error CALL VidExt_SetVideoMode(int, int, int, m64p_video_mode, m64p_
  */
 typedef m64p_error (*ptr_VidExt_ResizeWindow)(int, int);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL VidExt_ResizeWindow(int, int);
+EXPORT m64p_error CALL
+VidExt_ResizeWindow(int, int);
 #endif
 
 /* VidExt_SetCaption()
@@ -93,7 +98,8 @@ EXPORT m64p_error CALL VidExt_ResizeWindow(int, int);
  */
 typedef m64p_error (*ptr_VidExt_SetCaption)(const char *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL VidExt_SetCaption(const char *);
+EXPORT m64p_error CALL
+VidExt_SetCaption(const char *);
 #endif
 
 /* VidExt_ToggleFullScreen()
@@ -102,7 +108,8 @@ EXPORT m64p_error CALL VidExt_SetCaption(const char *);
  */
 typedef m64p_error (*ptr_VidExt_ToggleFullScreen)(void);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL VidExt_ToggleFullScreen(void);
+EXPORT m64p_error CALL
+VidExt_ToggleFullScreen(void);
 #endif
 
 /* VidExt_GL_GetProcAddress()
@@ -113,7 +120,8 @@ EXPORT m64p_error CALL VidExt_ToggleFullScreen(void);
  */
 typedef m64p_function (*ptr_VidExt_GL_GetProcAddress)(const char *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_function CALL VidExt_GL_GetProcAddress(const char *);
+EXPORT m64p_function CALL
+VidExt_GL_GetProcAddress(const char *);
 #endif
 
 /* VidExt_GL_SetAttribute()
@@ -123,7 +131,8 @@ EXPORT m64p_function CALL VidExt_GL_GetProcAddress(const char *);
  */
 typedef m64p_error (*ptr_VidExt_GL_SetAttribute)(m64p_GLattr, int);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL VidExt_GL_SetAttribute(m64p_GLattr, int);
+EXPORT m64p_error CALL
+VidExt_GL_SetAttribute(m64p_GLattr, int);
 #endif
 
 /* VidExt_GL_GetAttribute()
@@ -133,7 +142,8 @@ EXPORT m64p_error CALL VidExt_GL_SetAttribute(m64p_GLattr, int);
  */
 typedef m64p_error (*ptr_VidExt_GL_GetAttribute)(m64p_GLattr, int *);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL VidExt_GL_GetAttribute(m64p_GLattr, int *);
+EXPORT m64p_error CALL
+VidExt_GL_GetAttribute(m64p_GLattr, int *);
 #endif
 
 /* VidExt_GL_SwapBuffers()
@@ -143,7 +153,8 @@ EXPORT m64p_error CALL VidExt_GL_GetAttribute(m64p_GLattr, int *);
  */
 typedef m64p_error (*ptr_VidExt_GL_SwapBuffers)(void);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT m64p_error CALL VidExt_GL_SwapBuffers(void);
+EXPORT m64p_error CALL
+VidExt_GL_SwapBuffers(void);
 #endif
 
 /* VidExt_GL_GetDefaultFramebuffer()
@@ -157,7 +168,8 @@ EXPORT m64p_error CALL VidExt_GL_SwapBuffers(void);
  */
 typedef uint32_t (*ptr_VidExt_GL_GetDefaultFramebuffer)(void);
 #if defined(M64P_CORE_PROTOTYPES)
-EXPORT uint32_t CALL VidExt_GL_GetDefaultFramebuffer(void);
+EXPORT uint32_t CALL
+VidExt_GL_GetDefaultFramebuffer(void);
 #endif
 
 #ifdef __cplusplus
@@ -165,4 +177,3 @@ EXPORT uint32_t CALL VidExt_GL_GetDefaultFramebuffer(void);
 #endif
 
 #endif /* #define M64P_VIDEXT_H */
-

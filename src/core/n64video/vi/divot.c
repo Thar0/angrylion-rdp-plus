@@ -1,11 +1,12 @@
 #ifdef N64VIDEO_C
 
-static STRICTINLINE void divot_filter(struct n64video_pixel* final, struct n64video_pixel center, struct n64video_pixel left, struct n64video_pixel right)
+static STRICTINLINE void
+divot_filter(struct n64video_pixel *final, struct n64video_pixel center, struct n64video_pixel left,
+             struct n64video_pixel right)
 {
     *final = center;
 
-    if ((center.a & left.a & right.a) == 7)
-    {
+    if ((center.a & left.a & right.a) == 7) {
         return;
     }
 
@@ -26,4 +27,3 @@ static STRICTINLINE void divot_filter(struct n64video_pixel* final, struct n64vi
 }
 
 #endif // N64VIDEO_C
-
