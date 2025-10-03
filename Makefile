@@ -1,8 +1,13 @@
 TARGET := build/angrylion-plus.dll
 INSTALL_DIR := $(PJ64_DIR)/Plugin/GFX
+WINSDK_PATH := "/mnt/c/Program Files/Microsoft Visual Studio/2022/Community/SDK/ScopeCppSDK/vc15/SDK/include"
 
 CC := clang.exe
 CXX := clang++.exe
+
+WINDRES := llvm-windres-18
+WINDRES_FLAGS := --target=i386-windows-pc
+WINDRES_INC := --include-dir=$(WINSDK_PATH)/um --include-dir=$(WINSDK_PATH)/shared
 
 CLANG_FORMAT := clang-format-14
 FORMAT_ARGS := -i -style=file
@@ -21,7 +26,7 @@ INCLUDES := -Isrc
 DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
 
 LDFLAGS := -fuse-ld=lld-link -shared -m32 -target i386-windows-pc -Wl,/machine:x86
-LDLIBS := -luser32 -lshlwapi -lopengl32 -lgdi32 -lmsvcrt
+LDLIBS := -luser32 -lshlwapi -lopengl32 -lgdi32 -lcomctl32 -lmsvcrt
 
 ARFLAGS := -fuse-ld=llvm-lib
 
@@ -42,6 +47,8 @@ PJ64_C_FILES   := $(foreach dir, $(PJ64_DIRS), $(wildcard $(dir)/*.c))
 PJ64_CXX_FILES := $(foreach dir, $(PJ64_DIRS), $(wildcard $(dir)/*.cpp))
 PJ64_O_FILES := $(foreach f, $(PJ64_C_FILES), build/$(f:.c=.o)) $(foreach f, $(PJ64_CXX_FILES), build/$(f:.cpp=.o))
 PJ64_LIB := build/plugin-zilmar.lib
+PJ64_RC_FILES   := $(foreach dir, $(PJ64_DIRS), $(wildcard $(dir)/*.rc))
+PJ64_RC_O_FILES := $(foreach f, $(PJ64_RC_FILES), build/$(f:.rc=.rc.o))
 
 DEP_FILES := $(CORE_O_FILES:.o=.d) $(OUTPUT_O_FILES:.o=.d) $(PJ64_O_FILES:.o=.d)
 
@@ -66,7 +73,8 @@ format:
 install: all
 	cp $(TARGET) $(INSTALL_DIR)
 
-$(TARGET): $(CORE_LIB) $(OUTPUT_LIB) $(PJ64_LIB)
+# NOTE linker will discard the resource file if it's in a static library..
+$(TARGET): $(CORE_LIB) $(OUTPUT_LIB) $(PJ64_LIB) $(PJ64_RC_O_FILES)
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 $(CORE_LIB): $(CORE_O_FILES)
@@ -83,6 +91,9 @@ build/src/%.o: src/%.c
 
 build/src/%.o: src/%.cpp
 	$(CC) $(CXXFLAGS) $(OPTFLAGS) $(INCLUDES) $(DEPFLAGS) $(WARNFLAGS) $(DEFS) -c $< -o $@
+
+build/src/%.rc.o: src/%.rc
+	$(WINDRES) $(WINDRES_FLAGS) $(WINDRES_INC) $< -o $@
 
 # Dependencies
 
