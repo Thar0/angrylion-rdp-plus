@@ -1,28 +1,28 @@
-BUILD_DIR := build/m64p-linux
-TARGET := $(BUILD_DIR)/angrylion-plus.so
+BUILD_DIR := build/m64p-windows
+TARGET := $(BUILD_DIR)/mupen64plus-angrylion-plus.dll
 INSTALL_DIR := $(PJ64_DIR)
+WINSDK_PATH := "/mnt/c/Program Files/Microsoft Visual Studio/2022/Community/SDK/ScopeCppSDK/vc15/SDK/include"
 
-CC := clang-18
-CXX := clang++-18
-STRIP := llvm-strip-18
+CC := clang.exe
+CXX := clang++.exe
 
 CLANG_FORMAT := clang-format-14
 FORMAT_ARGS := -i -style=file
 FORMAT_FILES := $(shell find src -type f -name "*.[ch]")
 
 OPTFLAGS := -march=x86-64-v2 -O3 -ffast-math -flto
-CFLAGS   := -x c   -fPIC -std=gnu17 -fvisibility=hidden
-CXXFLAGS := -x c++ -fPIC -std=c++20 -fvisibility=hidden -fvisibility-inlines-hidden
+CFLAGS   := -x c   -fno-PIC -std=gnu17 -fvisibility=hidden
+CXXFLAGS := -x c++ -fno-PIC -std=c++20 -fvisibility=hidden -fvisibility-inlines-hidden
 WARNFLAGS := -Wall -Wextra -Wshadow -Wpointer-arith -Wformat=2 -Wnull-dereference -Woverflow -Wimplicit-fallthrough
 # WARNFLAGS += -Weverything -Wno-cast-function-type-strict -Wno-reserved-macro-identifier -Wno-unsafe-buffer-usage
 # WARNFLAGS += -Wno-declaration-after-statement -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-exit-time-destructors
 # WARNFLAGS += -Wno-global-constructors -Wno-date-time -Wno-unused-macros -Wno-sign-conversion -Wno-cast-align -Wno-implicit-int-conversion
 WARNFLAGS += -Werror=implicit-int -Werror=implicit-function-declaration -Werror=int-conversion -Werror=incompatible-pointer-types -Werror=return-type
-DEFS := -D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_WARNINGS
+DEFS := -D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_WARNINGS -DWIN32
 INCLUDES := -Isrc
 DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
 
-LDFLAGS := -shared $(OPTFLAGS) -static-libgcc -static-libstdc++
+LDFLAGS := -fuse-ld=lld-link -shared $(OPTFLAGS)
 LDLIBS :=
 
 CORE_DIRS      := $(shell find src/core -type d -not -path "src/core/n64video*")
@@ -45,6 +45,8 @@ M64P_O_FILES   := $(foreach f, $(M64P_C_FILES), $(BUILD_DIR)/$(f:.c=.o)) \
 
 DEP_FILES := $(CORE_O_FILES:.o=.d) $(OUTPUT_O_FILES:.o=.d) $(M64P_O_FILES:.o=.d)
 
+# fixpaths is a dreadful hack for converting windows paths to unix paths in dep files output by clang++.exe
+$(shell python3 tools/fixpaths.py $(BUILD_DIR))
 $(shell mkdir -p $(BUILD_DIR) $(foreach dir, $(CORE_DIRS) $(OUTPUT_DIRS) $(M64P_DIRS), $(BUILD_DIR)/$(dir)))
 
 .PHONY: all clean format install
@@ -66,7 +68,6 @@ install: all
 
 $(TARGET): $(CORE_O_FILES) $(OUTPUT_O_FILES) $(M64P_O_FILES)
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
-	$(STRIP) $@
 
 $(BUILD_DIR)/src/%.o: src/%.c
 	$(CC) $(CFLAGS) $(OPTFLAGS) $(INCLUDES) $(DEPFLAGS) $(WARNFLAGS) $(DEFS) -c $< -o $@

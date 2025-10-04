@@ -1,4 +1,5 @@
-TARGET := build/angrylion-plus.dll
+BUILD_DIR := build/pj64-win32
+TARGET := $(BUILD_DIR)/angrylion-plus.dll
 INSTALL_DIR := $(PJ64_DIR)/Plugin/GFX
 WINSDK_PATH := "/mnt/c/Program Files/Microsoft Visual Studio/2022/Community/SDK/ScopeCppSDK/vc15/SDK/include"
 
@@ -28,40 +29,38 @@ DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
 LDFLAGS := -fuse-ld=lld-link -shared $(OPTFLAGS) -m32 -target i386-windows-pc -Wl,/machine:x86
 LDLIBS := -luser32 -lshlwapi -lopengl32 -lgdi32 -lcomctl32 -lmsvcrt
 
-ARFLAGS := -fuse-ld=llvm-lib
-
-CORE_DIRS := $(shell find src/core -type d -not -path "src/core/n64video*")
+CORE_DIRS      := $(shell find src/core -type d -not -path "src/core/n64video*")
 CORE_C_FILES   := $(foreach dir, $(CORE_DIRS), $(wildcard $(dir)/*.c))
 CORE_CXX_FILES := $(foreach dir, $(CORE_DIRS), $(wildcard $(dir)/*.cpp))
-CORE_O_FILES := $(foreach f, $(CORE_C_FILES), build/$(f:.c=.o)) $(foreach f, $(CORE_CXX_FILES), build/$(f:.cpp=.o))
-CORE_LIB := build/alcore.lib
+CORE_O_FILES   := $(foreach f, $(CORE_C_FILES), $(BUILD_DIR)/$(f:.c=.o)) \
+                  $(foreach f, $(CORE_CXX_FILES), $(BUILD_DIR)/$(f:.cpp=.o))
 
-OUTPUT_DIRS := $(shell find src/output -type d)
+OUTPUT_DIRS      := $(shell find src/output -type d)
 OUTPUT_C_FILES   := $(foreach dir, $(OUTPUT_DIRS), $(wildcard $(dir)/*.c))
 OUTPUT_CXX_FILES := $(foreach dir, $(OUTPUT_DIRS), $(wildcard $(dir)/*.cpp))
-OUTPUT_O_FILES := $(foreach f, $(OUTPUT_C_FILES), build/$(f:.c=.o)) $(foreach f, $(OUTPUT_CXX_FILES), build/$(f:.cpp=.o))
-OUTPUT_LIB := build/aloutput.lib
+OUTPUT_O_FILES   := $(foreach f, $(OUTPUT_C_FILES), $(BUILD_DIR)/$(f:.c=.o)) \
+                    $(foreach f, $(OUTPUT_CXX_FILES), $(BUILD_DIR)/$(f:.cpp=.o))
 
-PJ64_DIRS := $(shell find src/plugin/zilmar -type d)
+PJ64_DIRS      := $(shell find src/plugin/zilmar -type d)
 PJ64_C_FILES   := $(foreach dir, $(PJ64_DIRS), $(wildcard $(dir)/*.c))
 PJ64_CXX_FILES := $(foreach dir, $(PJ64_DIRS), $(wildcard $(dir)/*.cpp))
-PJ64_O_FILES := $(foreach f, $(PJ64_C_FILES), build/$(f:.c=.o)) $(foreach f, $(PJ64_CXX_FILES), build/$(f:.cpp=.o))
-PJ64_LIB := build/plugin-zilmar.lib
-PJ64_RC_FILES   := $(foreach dir, $(PJ64_DIRS), $(wildcard $(dir)/*.rc))
-PJ64_RC_O_FILES := $(foreach f, $(PJ64_RC_FILES), build/$(f:.rc=.rc.o))
+PJ64_RC_FILES  := $(foreach dir, $(PJ64_DIRS), $(wildcard $(dir)/*.rc))
+PJ64_O_FILES   := $(foreach f, $(PJ64_C_FILES), $(BUILD_DIR)/$(f:.c=.o)) \
+                  $(foreach f, $(PJ64_CXX_FILES), $(BUILD_DIR)/$(f:.cpp=.o)) \
+                  $(foreach f, $(PJ64_RC_FILES), $(BUILD_DIR)/$(f:.rc=.rc.o))
 
 DEP_FILES := $(CORE_O_FILES:.o=.d) $(OUTPUT_O_FILES:.o=.d) $(PJ64_O_FILES:.o=.d)
 
 # fixpaths is a dreadful hack for converting windows paths to unix paths in dep files output by clang++.exe
-$(shell python3 tools/fixpaths.py build)
-$(shell mkdir -p build $(foreach dir, $(CORE_DIRS) $(OUTPUT_DIRS) $(PJ64_DIRS), build/$(dir)))
+$(shell python3 tools/fixpaths.py $(BUILD_DIR))
+$(shell mkdir -p $(BUILD_DIR) $(foreach dir, $(CORE_DIRS) $(OUTPUT_DIRS) $(PJ64_DIRS), $(BUILD_DIR)/$(dir)))
 
 .PHONY: all clean format install
 
 all: $(TARGET)
 
 clean:
-	$(RM) -r build
+	$(RM) -r $(BUILD_DIR)
 
 format:
 	$(CLANG_FORMAT) $(FORMAT_ARGS) $(FORMAT_FILES)
@@ -73,26 +72,16 @@ format:
 install: all
 	cp $(TARGET) $(INSTALL_DIR)
 
-# NOTE linker will discard the resource file if it's in a static library..
-$(TARGET): $(CORE_LIB) $(OUTPUT_LIB) $(PJ64_LIB) $(PJ64_RC_O_FILES)
+$(TARGET): $(CORE_O_FILES) $(OUTPUT_O_FILES) $(PJ64_O_FILES)
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-$(CORE_LIB): $(CORE_O_FILES)
-	$(CXX) $(ARFLAGS) $^ -o $@
-
-$(OUTPUT_LIB): $(OUTPUT_O_FILES)
-	$(CXX) $(ARFLAGS) $^ -o $@
-
-$(PJ64_LIB): $(PJ64_O_FILES)
-	$(CXX) $(ARFLAGS) $^ -o $@
-
-build/src/%.o: src/%.c
+$(BUILD_DIR)/src/%.o: src/%.c
 	$(CC) $(CFLAGS) $(OPTFLAGS) $(INCLUDES) $(DEPFLAGS) $(WARNFLAGS) $(DEFS) -c $< -o $@
 
-build/src/%.o: src/%.cpp
+$(BUILD_DIR)/src/%.o: src/%.cpp
 	$(CC) $(CXXFLAGS) $(OPTFLAGS) $(INCLUDES) $(DEPFLAGS) $(WARNFLAGS) $(DEFS) -c $< -o $@
 
-build/src/%.rc.o: src/%.rc
+$(BUILD_DIR)/src/%.rc.o: src/%.rc
 	$(WINDRES) $(WINDRES_FLAGS) $(WINDRES_INC) $< -o $@
 
 # Dependencies
