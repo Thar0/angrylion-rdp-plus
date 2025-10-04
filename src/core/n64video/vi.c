@@ -578,6 +578,16 @@ vi_process_fast_parallel(uint32_t worker_id)
         y_inc = parallel_num_workers();
     }
 
+    // TODO settle these scale values
+    unsigned overdraw_scale;
+    switch (__builtin_popcount(config.vi.overdraw_flags)) {
+        default: overdraw_scale = 0; break;
+        case 1:  overdraw_scale = 16; break;
+        case 2:  overdraw_scale = 16; break;
+        case 3:  overdraw_scale = 8;  break;
+        case 4:  overdraw_scale = 8;  break;
+    }
+
     for (y = y_begin; y < y_end; y += y_inc) {
         int32_t x;
         int32_t line = y * vi_width_low;
@@ -631,6 +641,29 @@ vi_process_fast_parallel(uint32_t worker_id)
                         uint16_t pix;
                         rdram_read_pair16(&pix, &hval, (frame_buffer >> 1) + line + x);
                         pixel->r = pixel->g = pixel->b = (((pix & 1) << 2) | hval) << 5;
+                    }
+                    break;
+
+                case VI_MODE_OVERDRAW:
+                    {
+                        if (!overdraw_accumulator[overdraw_index ^ 1])
+                            msg_error("overdraw_accumulator NULL access");
+
+                        uint32_t value = overdraw_accumulator[overdraw_index ^ 1][line + x] * overdraw_scale;
+                        if (value > 511) {
+                            // Fully red
+                            pixel->r = 255;
+                            pixel->g = 0;
+                            pixel->b = 0;
+                        } else if (value > 255) {
+                            // Step white towards red
+                            pixel->r = 255;
+                            pixel->g = 255 - (value - 256);
+                            pixel->b = 255 - (value - 256);
+                        } else {
+                            // Grayscale black to white
+                            pixel->r = pixel->g = pixel->b = value;
+                        }
                     }
                     break;
             }

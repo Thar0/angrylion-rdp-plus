@@ -64,12 +64,14 @@ z_build_com_table(void)
 }
 
 static STRICTINLINE void
-z_store(uint32_t zcurpixel, uint32_t z, int dzpixenc)
+z_store(struct rdp_state *wstate, uint32_t zcurpixel, uint32_t z, int dzpixenc)
 {
     uint16_t zval = z_com_table[z & 0x3FFFF] | (uint16_t)(dzpixenc >> 2);
     uint8_t hval = dzpixenc & 3;
 
     rdram_write_pair16(zcurpixel, zval, hval, 0);
+    if (config.vi.overdraw_flags & OVERDRAW_VIS_ZB_WR)
+        overdraw_incr(zcurpixel - (wstate->zb_address >> 1));
 }
 
 static STRICTINLINE uint32_t
@@ -110,6 +112,8 @@ z_compare(struct rdp_state *wstate, uint32_t zcurpixel, uint32_t sz, uint16_t dz
         uint8_t hval;
         uint16_t zval;
         PAIRREAD16(zval, hval, zcurpixel);
+        if (config.vi.overdraw_flags & OVERDRAW_VIS_ZB_RD)
+            overdraw_incr(zcurpixel - (wstate->zb_address >> 1));
 
         sz &= 0x3ffff; // u15.3
         uint32_t oz = z_decompress(zval);

@@ -49,6 +49,10 @@ extern ptr_PluginGetVersion CoreGetVersion;
 #define KEY_VI_HIDE_OVERSCAN   "ViHideOverscan"
 #define KEY_VI_INTEGER_SCALING "ViIntegerScaling"
 #define KEY_VI_VSYNC           "ViVsync"
+#define KEY_VI_OVERDRAW_FB_RD  "OverdrawFbRead"
+#define KEY_VI_OVERDRAW_FB_WR  "OverdrawFbWrite"
+#define KEY_VI_OVERDRAW_ZB_RD  "OverdrawZbRead"
+#define KEY_VI_OVERDRAW_ZB_WR  "OverdrawZbWrite"
 
 #define KEY_DP_COMPAT "DpCompat"
 

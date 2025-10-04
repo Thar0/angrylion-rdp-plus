@@ -17,6 +17,10 @@
 #define IDC_CHECK_VI_EXCLUSIVE2      1015
 #define IDC_CHECK_VI_INTEGER_SCALING 1015
 #define IDC_CHECK_BUSYLOOP           1016
+#define IDC_CHECK_OVERDRAW_FB_RD     1017
+#define IDC_CHECK_OVERDRAW_FB_WR     1018
+#define IDC_CHECK_OVERDRAW_ZB_RD     1019
+#define IDC_CHECK_OVERDRAW_ZB_WR     1020
 
 // Next default values for new objects
 //

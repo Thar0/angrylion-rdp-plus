@@ -58,6 +58,10 @@ MainDialog::MainDialog(QWidget *parent) : QDialog(parent)
     this->viHideOverscanCheckBox->setChecked(ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_HIDE_OVERSCAN));
     this->viIntegerScalingCheckBox->setChecked(ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_INTEGER_SCALING));
     this->viVsyncCheckBox->setChecked(ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_VSYNC));
+    this->viOverdrawFbRdCheckBox->setChecked(ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_FB_RD));
+    this->viOverdrawFbWrCheckBox->setChecked(ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_FB_WR));
+    this->viOverdrawZbRdCheckBox->setChecked(ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_ZB_RD));
+    this->viOverdrawZbWrCheckBox->setChecked(ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_ZB_WR));
 }
 
 MainDialog::~MainDialog()
@@ -103,6 +107,10 @@ MainDialog::on_buttonBox_clicked(QAbstractButton *button)
         int viHideOverscanValue = this->viHideOverscanCheckBox->isChecked() ? 1 : 0;
         int viIntegerScalingValue = this->viIntegerScalingCheckBox->isChecked() ? 1 : 0;
         int viVsyncValue = this->viVsyncCheckBox->isChecked() ? 1 : 0;
+        int viOverdrawFbRdValue = this->viOverdrawFbRdCheckBox->isChecked() ? 1 : 0;
+        int viOverdrawFbWrValue = this->viOverdrawFbWrCheckBox->isChecked() ? 1 : 0;
+        int viOverdrawZbRdValue = this->viOverdrawZbRdCheckBox->isChecked() ? 1 : 0;
+        int viOverdrawZbWrValue = this->viOverdrawZbWrCheckBox->isChecked() ? 1 : 0;
 
         ConfigSetParameter(configVideoAngrylionPlus, KEY_PARALLEL, M64TYPE_BOOL, &parallelValue);
         ConfigSetParameter(configVideoAngrylionPlus, KEY_BUSY_LOOP, M64TYPE_BOOL, &busyLoopValue);
@@ -111,6 +119,11 @@ MainDialog::on_buttonBox_clicked(QAbstractButton *button)
         ConfigSetParameter(configVideoAngrylionPlus, KEY_VI_HIDE_OVERSCAN, M64TYPE_BOOL, &viHideOverscanValue);
         ConfigSetParameter(configVideoAngrylionPlus, KEY_VI_INTEGER_SCALING, M64TYPE_BOOL, &viIntegerScalingValue);
         ConfigSetParameter(configVideoAngrylionPlus, KEY_VI_VSYNC, M64TYPE_BOOL, &viVsyncValue);
+
+        ConfigSetParameter(configVideoAngrylionPlus, KEY_VI_OVERDRAW_FB_RD, M64TYPE_BOOL, &viOverdrawFbRdValue);
+        ConfigSetParameter(configVideoAngrylionPlus, KEY_VI_OVERDRAW_FB_WR, M64TYPE_BOOL, &viOverdrawFbWrValue);
+        ConfigSetParameter(configVideoAngrylionPlus, KEY_VI_OVERDRAW_ZB_RD, M64TYPE_BOOL, &viOverdrawZbRdValue);
+        ConfigSetParameter(configVideoAngrylionPlus, KEY_VI_OVERDRAW_ZB_WR, M64TYPE_BOOL, &viOverdrawZbWrValue);
 
         ConfigSaveSection("Video-AngrylionPlus");
 
@@ -130,5 +143,9 @@ MainDialog::on_buttonBox_clicked(QAbstractButton *button)
         this->viHideOverscanCheckBox->setChecked(config.vi.hide_overscan);
         this->viIntegerScalingCheckBox->setChecked(config.vi.integer_scaling);
         this->viVsyncCheckBox->setChecked(config.vi.vsync);
+        this->viOverdrawFbRdCheckBox->setChecked(config.vi.overdraw_flags & OVERDRAW_VIS_FB_RD);
+        this->viOverdrawFbWrCheckBox->setChecked(config.vi.overdraw_flags & OVERDRAW_VIS_FB_WR);
+        this->viOverdrawZbRdCheckBox->setChecked(config.vi.overdraw_flags & OVERDRAW_VIS_ZB_RD);
+        this->viOverdrawZbWrCheckBox->setChecked(config.vi.overdraw_flags & OVERDRAW_VIS_ZB_WR);
     }
 }

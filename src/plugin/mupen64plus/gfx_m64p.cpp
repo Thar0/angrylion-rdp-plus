@@ -125,7 +125,7 @@ PluginStartup(m64p_dynlib_handle _CoreLibHandle, void *Context, void (*DebugCall
     ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_BUSY_LOOP, config_m64p.busyloop,
                          "Use a busyloop while waiting for work");
     ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_VI_MODE, config_m64p.vi.mode,
-                        "VI mode (0=Filtered, 1=Unfiltered, 2=Depth, 3=Coverage)");
+                        "VI mode (0=Filtered, 1=Unfiltered, 2=Depth, 3=Coverage, 4=Overdraw)");
     ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_VI_INTERP, config_m64p.vi.interp,
                         "Scaling interpolation type (0=Blocky (Nearest-neighbor), 1=Blurry (Bilinear), 2=Soft "
                         "(Bilinear + Nearest-neighbor))");
@@ -137,6 +137,14 @@ PluginStartup(m64p_dynlib_handle _CoreLibHandle, void *Context, void (*DebugCall
                          "Display upscaled pixels as groups of 1x1, 2x2, 3x3, etc. if True");
     ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_VSYNC, config_m64p.vi.vsync,
                          "Enable vsync to prevent tearing");
+    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_FB_RD, !!(config_m64p.vi.overdraw_flags & OVERDRAW_VIS_FB_RD),
+                         "Enable accumulating overdraw on framebuffer reads");
+    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_FB_WR, !!(config_m64p.vi.overdraw_flags & OVERDRAW_VIS_FB_WR),
+                         "Enable accumulating overdraw on framebuffer writes");
+    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_ZB_RD, !!(config_m64p.vi.overdraw_flags & OVERDRAW_VIS_ZB_RD),
+                         "Enable accumulating overdraw on z-buffer reads");
+    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_ZB_WR, !!(config_m64p.vi.overdraw_flags & OVERDRAW_VIS_ZB_WR),
+                         "Enable accumulating overdraw on z-buffer writes");
     ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_DP_COMPAT, config_m64p.dp.compat,
                         "Compatibility mode (0=Fast 1=Moderate 2=Slow");
 
@@ -249,6 +257,11 @@ config_load(void)
     config_m64p.vi.hide_overscan = ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_HIDE_OVERSCAN);
     config_m64p.vi.integer_scaling = ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_INTEGER_SCALING);
     config_m64p.vi.vsync = ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_VSYNC);
+    config_m64p.vi.overdraw_flags = 0;
+    config_m64p.vi.overdraw_flags |= ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_FB_RD) ? OVERDRAW_VIS_FB_RD : 0;
+    config_m64p.vi.overdraw_flags |= ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_FB_WR) ? OVERDRAW_VIS_FB_WR : 0;
+    config_m64p.vi.overdraw_flags |= ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_ZB_RD) ? OVERDRAW_VIS_ZB_RD : 0;
+    config_m64p.vi.overdraw_flags |= ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_OVERDRAW_ZB_WR) ? OVERDRAW_VIS_ZB_WR : 0;
 
     config_m64p.dp.compat = (dp_compat_profile)ConfigGetParamInt(configVideoAngrylionPlus, KEY_DP_COMPAT);
 }

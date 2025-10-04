@@ -532,7 +532,7 @@ render_spans_1cycle_complete(struct rdp_state *wstate, int start, int end, int t
                 wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
                                     &delayedhbwidx);
                 if (wstate->other_modes.z_update_en)
-                    z_store(zbcur, sz, dzpixenc);
+                    z_store(wstate, zbcur, sz, dzpixenc);
             } else if (ycur >= wstate->last_overwriting_scanline) {
                 // at or below the last valid scanline that uses more than 1 span allocation
                 // accumulate rejected hidden bits, 8-bit fbs use this for hidden bit writes
@@ -806,7 +806,7 @@ render_spans_2cycle_complete(struct rdp_state *wstate, int start, int end, int t
                 wstate->fbwrite_ptr(wstate, curpixel, fir, fig, fib, blend_en, curpixel_cvg, curpixel_memcvg, flip,
                                     &delayedhbwidx);
                 if (wstate->other_modes.z_update_en)
-                    z_store(zbcur, sz, dzpixenc);
+                    z_store(wstate, zbcur, sz, dzpixenc);
             } else if (ycur >= wstate->last_overwriting_scanline) {
                 // Do weird hidden bit writes
                 rejected_hbwrite_2cycle(wstate, cdith, blend_en, prewrap, curpixel, curpixel_cvg, curpixel_memcvg, flip,
