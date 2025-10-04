@@ -348,6 +348,23 @@ struct rdp_state {
 
 static struct rdp_state state[PARALLEL_MAX_WORKERS];
 
+static uint16_t *overdraw_accumulator[2];
+static uint32_t overdraw_buffer_limit[2] = { 320 * 240 + 1, 320 * 240 + 1 }; // Initial estimate for buffer size
+static unsigned overdraw_index = 0;
+
+static void overdraw_incr(uint32_t index)
+{
+    uint32_t old_limit = overdraw_buffer_limit[overdraw_index];
+    if (UNLIKELY(index >= old_limit)) {
+        uint32_t new_limit = index + 1;
+        /* msg_warning("overdraw buffer was resized to 0x%X", new_limit); */
+        overdraw_accumulator[overdraw_index] = realloc(overdraw_accumulator[overdraw_index], new_limit * sizeof(uint16_t));
+        memset(&overdraw_accumulator[overdraw_index][old_limit], 0, new_limit - old_limit);
+        overdraw_buffer_limit[overdraw_index] = new_limit;
+    }
+    overdraw_accumulator[overdraw_index][index]++;
+}
+
 static int32_t one_color = 0x100;
 static int32_t zero_color = 0x00;
 
@@ -690,6 +707,10 @@ rdp_sync_full(struct rdp_state *wstate, const uint32_t *args)
 {
     UNUSED(wstate);
     UNUSED(args);
+
+    // Swap overdraw buffer
+    overdraw_index ^= 1;
+    memset(overdraw_accumulator[overdraw_index], 0, overdraw_buffer_limit[overdraw_index] * sizeof(uint16_t));
 
     // signal DP interrupt
     *config.gfx.mi_intr_reg |= DP_INTERRUPT;

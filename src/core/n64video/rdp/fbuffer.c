@@ -124,6 +124,8 @@ fbwrite_16(struct rdp_state *wstate, uint32_t curpixel, uint32_t r, uint32_t g, 
     hval = finalcvg & 3;
 
     rdram_write_pair16(fb, rval, hval, 1);
+    if (config.vi.overdraw_flags & OVERDRAW_VIS_FB_WR)
+        overdraw_incr(curpixel);
 }
 
 static void
@@ -173,6 +175,8 @@ fbfill_16(struct rdp_state *wstate, uint32_t curpixel, int flip, int *delayedhbw
     uint16_t val = wstate->fill_color >> (16 - 16 * (fb & 1));
     uint8_t hval = ((val & 1) << 1) | (val & 1);
     rdram_write_pair16(fb, val, hval, 1);
+    if (config.vi.overdraw_flags & OVERDRAW_VIS_FB_WR)
+        overdraw_incr(curpixel);
 }
 
 static void
@@ -247,6 +251,8 @@ fbread_16(struct rdp_state *wstate, uint32_t curpixel, uint32_t *curpixel_memcvg
         uint8_t lowbits;
 
         PAIRREAD16(fword, hbyte, addr);
+        if (config.vi.overdraw_flags & OVERDRAW_VIS_FB_RD)
+            overdraw_incr(curpixel);
 
         if (wstate->fb_format == FORMAT_RGBA) {
             wstate->memory_color.r = RGBA16_R(fword);
@@ -278,6 +284,8 @@ fbread2_16(struct rdp_state *wstate, uint32_t curpixel, uint32_t *curpixel_memcv
         uint8_t lowbits;
 
         PAIRREAD16(fword, hbyte, addr);
+        if (config.vi.overdraw_flags & OVERDRAW_VIS_FB_RD)
+            overdraw_incr(curpixel);
 
         if (wstate->fb_format == FORMAT_RGBA) {
             wstate->pre_memory_color.r = RGBA16_R(fword);

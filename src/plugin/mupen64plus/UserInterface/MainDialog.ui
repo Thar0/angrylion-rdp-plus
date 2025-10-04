@@ -167,7 +167,61 @@
                <string>Coverage</string>
               </property>
              </item>
+             <item>
+              <property name="text">
+               <string>Overdraw</string>
+              </property>
+             </item>
             </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="horizontalLayout_12">
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <item>
+            <layout class="QVBoxLayout" name="verticalLayout_8">
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <widget class="QCheckBox" name="viOverdrawFbRdCheckBox">
+               <property name="text">
+                <string>Overdraw: FB Read</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="viOverdrawFbWrCheckBox">
+               <property name="text">
+                <string>Overdraw: FB Write</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QVBoxLayout" name="verticalLayout_9">
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <widget class="QCheckBox" name="viOverdrawZbRdCheckBox">
+               <property name="text">
+                <string>Overdraw: ZB Read</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="viOverdrawZbWrCheckBox">
+               <property name="text">
+                <string>Overdraw: ZB Write</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </item>
           </layout>
          </item>

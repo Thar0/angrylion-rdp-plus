@@ -165,6 +165,7 @@ n64video_config_init(struct n64video_config *conf)
     conf->parallel = true;
     conf->vi.vsync = true;
     conf->vi.interp = VI_INTERP_HYBRID;
+    conf->vi.overdraw_flags = OVERDRAW_VIS_FB_WR;
 }
 
 static void
@@ -221,6 +222,13 @@ n64video_init(struct n64video_config *_config)
     rdram_init();
     vi_init();
     cmd_init();
+
+    if (overdraw_accumulator[0])
+        msg_error("overdraw_accumulator[0] not null");
+    if (overdraw_accumulator[1])
+        msg_error("overdraw_accumulator[1] not null");
+    overdraw_accumulator[0] = calloc(sizeof(uint16_t), overdraw_buffer_limit[0]); // Initial estimate, may resize
+    overdraw_accumulator[1] = calloc(sizeof(uint16_t), overdraw_buffer_limit[1]); // Initial estimate, may resize
 
     rdp_pipeline_crashed = 0;
     memset(&onetimewarnings, 0, sizeof(onetimewarnings));
@@ -332,4 +340,13 @@ n64video_close(void)
 {
     vi_close();
     parallel_close();
+
+    if (overdraw_accumulator[0]) {
+        free(overdraw_accumulator[0]);
+        overdraw_accumulator[0] = NULL;
+    }
+    if (overdraw_accumulator[1]) {
+        free(overdraw_accumulator[1]);
+        overdraw_accumulator[1] = NULL;
+    }
 }

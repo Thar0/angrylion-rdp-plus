@@ -46,6 +46,7 @@ enum vi_mode {
     VI_MODE_COLOR,    // direct color buffer, unfiltered
     VI_MODE_DEPTH,    // depth buffer as grayscale
     VI_MODE_COVERAGE, // coverage as grayscale
+    VI_MODE_OVERDRAW, // overdraw accumulated over a frame
     VI_MODE_NUM
 };
 
@@ -79,6 +80,11 @@ struct n64video_frame_buffer {
     bool valid;
 };
 
+#define OVERDRAW_VIS_FB_RD (1 << 0)
+#define OVERDRAW_VIS_FB_WR (1 << 1)
+#define OVERDRAW_VIS_ZB_RD (1 << 2)
+#define OVERDRAW_VIS_ZB_WR (1 << 3)
+
 struct n64video_config {
     struct {
         uint8_t *rdram;           // RDRAM pointer
@@ -90,13 +96,14 @@ struct n64video_config {
         void (*mi_intr_cb)(void); // interrupt callback function
     } gfx;
     struct {
-        enum vi_mode mode;     // output mode
-        enum vi_interp interp; // output interpolation method
-        bool widescreen;       // force 16:9 aspect ratio if true
-        bool hide_overscan;    // crop to visible area if true
-        bool vsync;            // enable vsync if true
-        bool exclusive;        // run in exclusive mode when in fullscreen if true
-        bool integer_scaling;  // one native pixel is displayed as a multiple of a screen pixel if true
+        enum vi_mode mode;      // output mode
+        uint8_t overdraw_flags; // overdraw modes
+        enum vi_interp interp;  // output interpolation method
+        bool widescreen;        // force 16:9 aspect ratio if true
+        bool hide_overscan;     // crop to visible area if true
+        bool vsync;             // enable vsync if true
+        bool exclusive;         // run in exclusive mode when in fullscreen if true
+        bool integer_scaling;   // one native pixel is displayed as a multiple of a screen pixel if true
     } vi;
     struct {
         enum dp_compat_profile compat; // multithreading compatibility mode

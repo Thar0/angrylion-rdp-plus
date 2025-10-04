@@ -21,14 +21,18 @@
 #define KEY_GEN_PARALLEL    "parallel"
 #define KEY_GEN_NUM_WORKERS "num_workers"
 
-#define KEY_VI_MODE          "mode"
-#define KEY_VI_INTERP        "interpolation"
-#define KEY_VI_WIDESCREEN    "widescreen"
-#define KEY_VI_HIDE_OVERSCAN "hide_overscan"
-#define KEY_VI_EXCLUSIVE     "exclusive"
-#define KEY_VI_VSYNC         "vsync"
-#define KEY_VI_INT_SCALING   "integer_scaling"
-#define KEY_BUSYLOOP         "busyloop"
+#define KEY_VI_MODE           "mode"
+#define KEY_VI_INTERP         "interpolation"
+#define KEY_VI_WIDESCREEN     "widescreen"
+#define KEY_VI_HIDE_OVERSCAN  "hide_overscan"
+#define KEY_VI_EXCLUSIVE      "exclusive"
+#define KEY_VI_VSYNC          "vsync"
+#define KEY_VI_INT_SCALING    "integer_scaling"
+#define KEY_VI_OVERDRAW_FB_RD "overdraw_fb_rd"
+#define KEY_VI_OVERDRAW_FB_WR "overdraw_fb_wr"
+#define KEY_VI_OVERDRAW_ZB_RD "overdraw_zb_rd"
+#define KEY_VI_OVERDRAW_ZB_WR "overdraw_zb_wr"
+#define KEY_BUSYLOOP          "busyloop"
 
 #define KEY_DP_COMPAT "compat"
 
@@ -56,6 +60,10 @@ static HWND dlg_check_vi_busyloop;
 static HWND dlg_combo_dp_compat;
 static HWND dlg_spin_workers;
 static HWND dlg_edit_workers;
+static HWND dlg_check_overdraw_fb_rd;
+static HWND dlg_check_overdraw_fb_wr;
+static HWND dlg_check_overdraw_zb_rd;
+static HWND dlg_check_overdraw_zb_wr;
 
 static void
 config_dialog_update_multithread(void)
@@ -99,7 +107,8 @@ config_dialog_proc(HWND hwnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
                     "Filtered",   // VI_MODE_NORMAL
                     "Unfiltered", // VI_MODE_COLOR
                     "Depth",      // VI_MODE_DEPTH
-                    "Coverage"    // VI_MODE_COVERAGE
+                    "Coverage",   // VI_MODE_COVERAGE
+                    "Overdraw"    // VI_MODE_OVERDRAW
                 };
 
                 dlg_combo_vi_mode = GetDlgItem(hwnd, IDC_COMBO_VI_MODE);
@@ -132,6 +141,10 @@ config_dialog_proc(HWND hwnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
                 CONFIG_DLG_INIT_CHECKBOX(IDC_CHECK_VI_VSYNC, dlg_check_vi_vsync, config.vi.vsync);
                 CONFIG_DLG_INIT_CHECKBOX(IDC_CHECK_VI_INTEGER_SCALING, dlg_check_vi_integer_scaling,
                                          config.vi.integer_scaling);
+                CONFIG_DLG_INIT_CHECKBOX(IDC_CHECK_OVERDRAW_FB_RD, dlg_check_overdraw_fb_rd, !!(config.vi.overdraw_flags & OVERDRAW_VIS_FB_RD));
+                CONFIG_DLG_INIT_CHECKBOX(IDC_CHECK_OVERDRAW_FB_WR, dlg_check_overdraw_fb_wr, !!(config.vi.overdraw_flags & OVERDRAW_VIS_FB_WR));
+                CONFIG_DLG_INIT_CHECKBOX(IDC_CHECK_OVERDRAW_ZB_RD, dlg_check_overdraw_zb_rd, !!(config.vi.overdraw_flags & OVERDRAW_VIS_ZB_RD));
+                CONFIG_DLG_INIT_CHECKBOX(IDC_CHECK_OVERDRAW_ZB_WR, dlg_check_overdraw_zb_wr, !!(config.vi.overdraw_flags & OVERDRAW_VIS_ZB_WR));
                 CONFIG_DLG_INIT_CHECKBOX(IDC_CHECK_BUSYLOOP, dlg_check_vi_busyloop, config.busyloop);
 
                 dlg_edit_workers = GetDlgItem(hwnd, IDC_EDIT_WORKERS);
@@ -175,6 +188,11 @@ config_dialog_proc(HWND hwnd, UINT iMessage, WPARAM wParam, LPARAM lParam)
                         config.vi.exclusive = SendMessage(dlg_check_vi_exclusive, BM_GETCHECK, 0, 0);
                         config.vi.vsync = SendMessage(dlg_check_vi_vsync, BM_GETCHECK, 0, 0);
                         config.vi.integer_scaling = SendMessage(dlg_check_vi_integer_scaling, BM_GETCHECK, 0, 0);
+                        config.vi.overdraw_flags = 0;
+                        config.vi.overdraw_flags |= SendMessage(dlg_check_overdraw_fb_rd, BM_GETCHECK, 0, 0) ? OVERDRAW_VIS_FB_RD : 0;
+                        config.vi.overdraw_flags |= SendMessage(dlg_check_overdraw_fb_wr, BM_GETCHECK, 0, 0) ? OVERDRAW_VIS_FB_WR : 0;
+                        config.vi.overdraw_flags |= SendMessage(dlg_check_overdraw_zb_rd, BM_GETCHECK, 0, 0) ? OVERDRAW_VIS_ZB_RD : 0;
+                        config.vi.overdraw_flags |= SendMessage(dlg_check_overdraw_zb_wr, BM_GETCHECK, 0, 0) ? OVERDRAW_VIS_ZB_WR : 0;
                         config.busyloop = SendMessage(dlg_check_vi_busyloop, BM_GETCHECK, 0, 0);
                         config.dp.compat = SendMessage(dlg_combo_dp_compat, CB_GETCURSEL, 0, 0);
                         config.parallel = SendMessage(dlg_check_multithread, BM_GETCHECK, 0, 0);
@@ -224,6 +242,18 @@ config_handle(const char *key, const char *value, const char *section)
             config.vi.vsync = strtol(value, NULL, 0) != 0;
         } else if (!_strcmpi(key, KEY_VI_INT_SCALING)) {
             config.vi.integer_scaling = strtol(value, NULL, 0) != 0;
+        } else if (!_strcmpi(key, KEY_VI_OVERDRAW_FB_RD)) {
+            config.vi.overdraw_flags &= ~OVERDRAW_VIS_FB_RD;
+            config.vi.overdraw_flags |= strtol(value, NULL, 0) ? OVERDRAW_VIS_FB_RD : 0;
+        } else if (!_strcmpi(key, KEY_VI_OVERDRAW_FB_WR)) {
+            config.vi.overdraw_flags &= ~OVERDRAW_VIS_FB_WR;
+            config.vi.overdraw_flags |= strtol(value, NULL, 0) ? OVERDRAW_VIS_FB_WR : 0;
+        } else if (!_strcmpi(key, KEY_VI_OVERDRAW_ZB_RD)) {
+            config.vi.overdraw_flags &= ~OVERDRAW_VIS_ZB_RD;
+            config.vi.overdraw_flags |= strtol(value, NULL, 0) ? OVERDRAW_VIS_ZB_RD : 0;
+        } else if (!_strcmpi(key, KEY_VI_OVERDRAW_ZB_WR)) {
+            config.vi.overdraw_flags &= ~OVERDRAW_VIS_ZB_WR;
+            config.vi.overdraw_flags |= strtol(value, NULL, 0) ? OVERDRAW_VIS_ZB_WR : 0;
         } else if (!_strcmpi(key, KEY_BUSYLOOP)) {
             config.busyloop = strtol(value, NULL, 0) != 0;
         }
@@ -344,6 +374,10 @@ config_save(void)
     config_write_int32(fp, KEY_VI_EXCLUSIVE, config.vi.exclusive);
     config_write_int32(fp, KEY_VI_VSYNC, config.vi.vsync);
     config_write_int32(fp, KEY_VI_INT_SCALING, config.vi.integer_scaling);
+    config_write_int32(fp, KEY_VI_OVERDRAW_FB_RD, !!(config.vi.overdraw_flags & OVERDRAW_VIS_FB_RD));
+    config_write_int32(fp, KEY_VI_OVERDRAW_FB_WR, !!(config.vi.overdraw_flags & OVERDRAW_VIS_FB_WR));
+    config_write_int32(fp, KEY_VI_OVERDRAW_ZB_RD, !!(config.vi.overdraw_flags & OVERDRAW_VIS_ZB_RD));
+    config_write_int32(fp, KEY_VI_OVERDRAW_ZB_WR, !!(config.vi.overdraw_flags & OVERDRAW_VIS_ZB_WR));
     config_write_int32(fp, KEY_BUSYLOOP, config.busyloop);
     fputs("\n", fp);
 
