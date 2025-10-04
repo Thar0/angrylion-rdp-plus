@@ -13,7 +13,7 @@ CLANG_FORMAT := clang-format-14
 FORMAT_ARGS := -i -style=file
 FORMAT_FILES := $(shell find src -type f -name "*.[ch]")
 
-OPTFLAGS := -march=x86-64-v4 -msse4.2 -mavx512f -mavx512bw -mavx512vl -O3 -ffast-math -flto
+OPTFLAGS := -march=x86-64-v2 -O3 -ffast-math -flto
 CFLAGS   := -x c   -fno-PIC -std=gnu17 -m32 -target i386-windows-pc -fvisibility=hidden
 CXXFLAGS := -x c++ -fno-PIC -std=c++20 -m32 -target i386-windows-pc -fvisibility=hidden -fvisibility-inlines-hidden
 WARNFLAGS := -Wall -Wextra -Wshadow -Wpointer-arith -Wformat=2 -Wnull-dereference -Woverflow -Wimplicit-fallthrough
