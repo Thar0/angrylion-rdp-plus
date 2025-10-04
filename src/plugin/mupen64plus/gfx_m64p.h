@@ -1,5 +1,10 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #include "core/n64video.h"
 #include "api/m64p_plugin.h"
 #include "api/m64p_common.h"
@@ -13,10 +18,12 @@
 #define DLSYM(a, b) dlsym(a, b)
 #endif
 
+extern m64p_handle configVideoGeneral;
+extern m64p_handle configVideoAngrylionPlus;
+
 extern GFX_INFO gfx;
 extern m64p_dynlib_handle CoreLibHandle;
 extern void (*render_callback)(int);
-extern m64p_handle configVideoAngrylionPlus;
 extern void (*debug_callback)(void *, int, const char *);
 extern void *debug_call_context;
 
@@ -44,3 +51,7 @@ extern ptr_PluginGetVersion       CoreGetVersion;
 #define KEY_VI_VSYNC           "ViVsync"
 
 #define KEY_DP_COMPAT "DpCompat"
+
+#ifdef __cplusplus
+}
+#endif

@@ -13,7 +13,7 @@
 #include <QDialog>
 #include <QAbstractButton>
 
-#include "ui_MainDialog.h"
+#include "MainDialog.ui.h"
 
 namespace UserInterface
 {

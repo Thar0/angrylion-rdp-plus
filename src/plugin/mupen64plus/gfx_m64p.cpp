@@ -47,26 +47,43 @@ ptr_ConfigSetDefaultInt ConfigSetDefaultInt = NULL;
 ptr_ConfigSetDefaultBool ConfigSetDefaultBool = NULL;
 ptr_ConfigGetParamInt ConfigGetParamInt = NULL;
 ptr_ConfigGetParamBool ConfigGetParamBool = NULL;
+ptr_ConfigSetParameter ConfigSetParameter = NULL;
 ptr_PluginGetVersion CoreGetVersion = NULL;
 
+static struct n64video_config config;
 static bool warn_hle;
 static bool plugin_initialized;
+
+extern "C"
+{
+
 void (*debug_callback)(void *, int, const char *);
 void *debug_call_context;
-static struct n64video_config config;
-
 m64p_dynlib_handle CoreLibHandle;
 GFX_INFO gfx;
 void (*render_callback)(int);
 
+}
+
+m64p_handle configVideoGeneral = NULL;
 m64p_handle configVideoAngrylionPlus = NULL;
+#ifdef RMG
+#define CONFIG_GENERAL configVideoAngrylionPlus
+#else
+#define CONFIG_GENERAL configVideoGeneral
+#endif
 
 #define PLUGIN_VERSION           0x010600
 #define VIDEO_PLUGIN_API_VERSION 0x020500
 
+extern "C"
+{
+
 extern int32_t win_width;
 extern int32_t win_height;
 extern int32_t win_fullscreen;
+
+}
 
 EXPORT m64p_error CALL
 PluginStartup(m64p_dynlib_handle _CoreLibHandle, void *Context, void (*DebugCallback)(void *, int, const char *))
@@ -89,21 +106,16 @@ PluginStartup(m64p_dynlib_handle _CoreLibHandle, void *Context, void (*DebugCall
     ConfigGetParamBool = (ptr_ConfigGetParamBool)DLSYM(CoreLibHandle, "ConfigGetParamBool");
     ConfigSetParameter = (ptr_ConfigSetParameter)DLSYM(CoreLibHandle, "ConfigSetParameter");
 
+#ifndef RMG
+    ConfigOpenSection("Video-General", &configVideoGeneral);
+#endif
     ConfigOpenSection("Video-AngrylionPlus", &configVideoAngrylionPlus);
 
-#ifdef RMG
-#define CONFIG configVideoAngrylionPlus
-#else
-#define CONFIG configVideoGeneral
-#endif
-
 #ifndef RMG
-    ConfigSetDefaultBool(CONFIG, KEY_FULLSCREEN, 0, "Use fullscreen mode if True, or windowed mode if False");
+    ConfigSetDefaultBool(CONFIG_GENERAL, KEY_FULLSCREEN, 0, "Use fullscreen mode if True, or windowed mode if False");
 #endif
-    ConfigSetDefaultInt(CONFIG, KEY_SCREEN_WIDTH, 640, "Width of output window or fullscreen width");
-    ConfigSetDefaultInt(CONFIG, KEY_SCREEN_HEIGHT, 480, "Height of output window or fullscreen height");
-
-#undef CONFIG
+    ConfigSetDefaultInt(CONFIG_GENERAL, KEY_SCREEN_WIDTH, 640, "Width of output window or fullscreen width");
+    ConfigSetDefaultInt(CONFIG_GENERAL, KEY_SCREEN_HEIGHT, 480, "Height of output window or fullscreen height");
 
     CoreGetVersion = (ptr_PluginGetVersion)DLSYM(CoreLibHandle, "PluginGetVersion");
 
@@ -130,6 +142,9 @@ PluginStartup(m64p_dynlib_handle _CoreLibHandle, void *Context, void (*DebugCall
     ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_DP_COMPAT, config.dp.compat,
                         "Compatibility mode (0=Fast 1=Moderate 2=Slow");
 
+#ifndef RMG
+    ConfigOpenSection("Video-General", &configVideoGeneral);
+#endif
     ConfigSaveSection("Video-AngrylionPlus");
 
     plugin_initialized = true;
@@ -180,20 +195,17 @@ PluginGetVersion(m64p_plugin_type *PluginType, int *PluginVersion, int *APIVersi
 }
 
 #ifdef RMG
-extern "C"
+extern "C" EXPORT m64p_error CALL
+PluginConfig(void* parent)
 {
-    EXPORT m64p_error CALL PluginConfig(void* parent)
-    {
-        if (!plugin_initialized)
-        {
-            return M64ERR_NOT_INIT;
-        }
-
-        UserInterface::MainDialog dialog((QWidget*)parent);
-        dialog.exec();
-
-        return M64ERR_SUCCESS;
+    if (!plugin_initialized) {
+        return M64ERR_NOT_INIT;
     }
+
+    UserInterface::MainDialog dialog((QWidget*)parent);
+    dialog.exec();
+
+    return M64ERR_SUCCESS;
 }
 #endif
 
@@ -230,9 +242,13 @@ ProcessRDPList(void)
 EXPORT int CALL
 RomOpen(void)
 {
+#ifdef RMG
     win_fullscreen = false;
-    win_width = ConfigGetParamInt(configVideoAngrylionPlus, KEY_SCREEN_WIDTH);
-    win_height = ConfigGetParamInt(configVideoAngrylionPlus, KEY_SCREEN_HEIGHT);
+#else
+    win_fullscreen = ConfigGetParamBool(CONFIG_GENERAL, KEY_FULLSCREEN);
+#endif
+    win_width = ConfigGetParamInt(CONFIG_GENERAL, KEY_SCREEN_WIDTH);
+    win_height = ConfigGetParamInt(CONFIG_GENERAL, KEY_SCREEN_HEIGHT);
 
     config.parallel = ConfigGetParamBool(configVideoAngrylionPlus, KEY_PARALLEL);
     config.num_workers = ConfigGetParamInt(configVideoAngrylionPlus, KEY_NUM_WORKERS);
