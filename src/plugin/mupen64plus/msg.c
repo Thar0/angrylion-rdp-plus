@@ -8,21 +8,17 @@
 
 #define MSG_BUFFER_LEN 256
 
-void
+NORETURN void
 msg_error(const char *err, ...)
 {
-    if (debug_callback == NULL) {
-        return;
+    if (debug_callback != NULL) {
+        va_list arg;
+        va_start(arg, err);
+        char buf[MSG_BUFFER_LEN];
+        vsnprintf(buf, MSG_BUFFER_LEN, err, arg);
+        (*debug_callback)(debug_call_context, M64MSG_ERROR, buf);
+        va_end(arg);
     }
-
-    va_list arg;
-    va_start(arg, err);
-    char buf[MSG_BUFFER_LEN];
-    vsprintf(buf, err, arg);
-
-    (*debug_callback)(debug_call_context, M64MSG_ERROR, buf);
-
-    va_end(arg);
     exit(0);
 }
 
@@ -36,7 +32,7 @@ msg_warning(const char *err, ...)
     va_list arg;
     va_start(arg, err);
     char buf[MSG_BUFFER_LEN];
-    vsprintf(buf, err, arg);
+    vsnprintf(buf, MSG_BUFFER_LEN, err, arg);
 
     (*debug_callback)(debug_call_context, M64MSG_WARNING, buf);
 
@@ -53,7 +49,7 @@ msg_debug(const char *err, ...)
     va_list arg;
     va_start(arg, err);
     char buf[MSG_BUFFER_LEN];
-    vsprintf(buf, err, arg);
+    vsnprintf(buf, MSG_BUFFER_LEN, err, arg);
 
     (*debug_callback)(debug_call_context, M64MSG_INFO, buf);
 

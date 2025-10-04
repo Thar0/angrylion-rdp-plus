@@ -7,3 +7,4 @@
 src/core/version.h
 private/
 build/
+build-linux/

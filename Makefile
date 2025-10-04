@@ -25,7 +25,7 @@ DEFS := -D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_WARNINGS
 INCLUDES := -Isrc
 DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
 
-LDFLAGS := -fuse-ld=lld-link -shared -m32 -target i386-windows-pc -Wl,/machine:x86
+LDFLAGS := -fuse-ld=lld-link -shared $(OPTFLAGS) -m32 -target i386-windows-pc -Wl,/machine:x86
 LDLIBS := -luser32 -lshlwapi -lopengl32 -lgdi32 -lcomctl32 -lmsvcrt
 
 ARFLAGS := -fuse-ld=llvm-lib
