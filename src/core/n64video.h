@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -112,3 +116,7 @@ void
 n64video_process_list(void);
 void
 n64video_close(void);
+
+#ifdef __cplusplus
+}
+#endif
