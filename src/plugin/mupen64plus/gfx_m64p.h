@@ -12,7 +12,7 @@ extern "C" {
 
 #ifdef _WIN32
 #include <Windows.h>
-#define DLSYM(a, b) GetProcAddress(a, b)
+#define DLSYM(a, b) GetProcAddress((HMODULE)(a), b)
 #else
 #include <dlfcn.h>
 #define DLSYM(a, b) dlsym(a, b)

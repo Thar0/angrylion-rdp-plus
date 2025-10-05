@@ -1,20 +1,20 @@
 BUILD_DIR := build/rmg-linux
 TARGET := $(BUILD_DIR)/rmg-angrylion-plus.so
 INSTALL_DIR := $(PJ64_DIR)
+
 QT_VERSION := Qt6
 # qt6-base-dev on ubuntu doesn't properly support pkg-config..
-QT_HEADERS := -I/usr/include/x86_64-linux-gnu/qt6 \
-  -I/usr/include/x86_64-linux-gnu/qt6/QtCore \
-  -I/usr/include/x86_64-linux-gnu/qt6/QtWidgets \
-  -I/usr/include/x86_64-linux-gnu/qt6/QtGui \
+QT_HEADERS := /usr/include/x86_64-linux-gnu/qt6
+QT_LIBEXEC := /usr/lib/qt6/libexec/
+QT_HEADERS := -I$(QT_HEADERS) -I$(QT_HEADERS)/QtCore -I$(QT_HEADERS)/QtWidgets -I$(QT_HEADERS)/QtGui \
   # $(shell pkg-config --cflags-only-I $(QT_VERSION)Core $(QT_VERSION)Widgets $(QT_VERSION)Gui)
 
 CC := clang-18
 CXX := clang++-18
 STRIP := llvm-strip-18
 
-MOC := /usr/lib/qt6/libexec/moc
-UIC := /usr/lib/qt6/libexec/uic
+MOC := $(QT_LIBEXEC)moc
+UIC := $(QT_LIBEXEC)uic
 
 CLANG_FORMAT := clang-format-14
 FORMAT_ARGS := -i -style=file
