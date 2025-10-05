@@ -17,7 +17,7 @@ using namespace UserInterface;
 extern struct n64video_config config_m64p;
 extern bool config_stale_m64p;
 
-MainDialog::MainDialog(QWidget* parent) : QDialog(parent)
+MainDialog::MainDialog(QWidget *parent) : QDialog(parent)
 {
     this->setupUi(this);
 
@@ -33,8 +33,7 @@ MainDialog::MainDialog(QWidget* parent) : QDialog(parent)
     QString resolutionString = QString::number(width) + " x " + QString::number(height);
 
     // add resolution if it doesnt exist
-    if (this->screenSizeComboBox->findText(resolutionString) == -1)
-    {
+    if (this->screenSizeComboBox->findText(resolutionString) == -1) {
         this->screenSizeComboBox->addItem(resolutionString);
     }
     // set resolution as current item
@@ -65,17 +64,17 @@ MainDialog::~MainDialog()
 {
 }
 
-void MainDialog::on_buttonBox_clicked(QAbstractButton* button)
+void
+MainDialog::on_buttonBox_clicked(QAbstractButton *button)
 {
     QPushButton *pushButton = (QPushButton *)button;
     QPushButton *okButton = this->buttonBox->button(QDialogButtonBox::Ok);
     QPushButton *defaultButton = this->buttonBox->button(QDialogButtonBox::RestoreDefaults);
 
-    if (pushButton == okButton)
-    {
+    if (pushButton == okButton) {
         // screen size
         QStringList trimmedScreenSize = this->screenSizeComboBox->currentText().remove(' ').split("x");
-        int width  = trimmedScreenSize.at(0).toInt();
+        int width = trimmedScreenSize.at(0).toInt();
         int height = trimmedScreenSize.at(1).toInt();
         ConfigSetParameter(configVideoAngrylionPlus, KEY_SCREEN_WIDTH, M64TYPE_INT, &width);
         ConfigSetParameter(configVideoAngrylionPlus, KEY_SCREEN_HEIGHT, M64TYPE_INT, &height);
@@ -116,9 +115,7 @@ void MainDialog::on_buttonBox_clicked(QAbstractButton* button)
         ConfigSaveSection("Video-AngrylionPlus");
 
         config_stale_m64p = true;
-    }
-    else if (pushButton == defaultButton)
-    {
+    } else if (pushButton == defaultButton) {
         n64video_config config;
         n64video_config_init(&config);
 

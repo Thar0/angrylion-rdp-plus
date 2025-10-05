@@ -12,7 +12,7 @@ WINDRES_INC := --include-dir=$(WINSDK_PATH)/um --include-dir=$(WINSDK_PATH)/shar
 
 CLANG_FORMAT := clang-format-14
 FORMAT_ARGS := -i -style=file
-FORMAT_FILES := $(shell find src -type f -name "*.[ch]")
+FORMAT_FILES := $(shell find src -type f -name "*.[ch]") $(shell find src -type f -name "*.cpp")
 
 OPTFLAGS := -march=x86-64-v2 -O3 -ffast-math -flto
 CFLAGS   := -x c   -fno-PIC -std=gnu17 -m32 -target i386-windows-pc -fvisibility=hidden

@@ -12,7 +12,7 @@
 
 class Parallel
 {
-public:
+  public:
     Parallel(std::uint32_t num_workers)
     {
         if (num_workers == 0) {
@@ -43,7 +43,7 @@ public:
         start_work();
 
         // join worker threads to make sure they have finished
-        for (auto& thread : m_workers) {
+        for (auto &thread : m_workers) {
             thread.join();
         }
 
@@ -67,7 +67,7 @@ public:
         wait();
     }
 
-    void run(std::function<void(std::uint32_t)>&& task)
+    void run(std::function<void(std::uint32_t)> &&task)
     {
         // don't allow more tasks if workers are stopping
         if (!m_accept_work) {
@@ -90,7 +90,7 @@ public:
         return m_num_workers;
     }
 
-protected:
+  protected:
     std::function<void(std::uint32_t)> m_task;
     std::vector<std::thread> m_workers;
     std::mutex m_signal_mutex;
@@ -135,9 +135,7 @@ protected:
                 m_signal_done.notify_one();
 
                 // take a break and wait for more work
-                m_signal_work.wait(ul, [worker_mask, this] {
-                    return (m_tasks_done & worker_mask) == 0;
-                });
+                m_signal_work.wait(ul, [worker_mask, this] { return (m_tasks_done & worker_mask) == 0; });
             }
         }
     }
@@ -146,19 +144,17 @@ protected:
     {
         // wait for all workers to set their task bits
         std::unique_lock<std::mutex> ul(m_signal_mutex);
-        m_signal_done.wait(ul, [this] {
-            return m_tasks_done == m_all_tasks_done;
-        });
+        m_signal_done.wait(ul, [this] { return m_tasks_done == m_all_tasks_done; });
     }
 
-    void operator=(const Parallel&) = delete;
-    Parallel(const Parallel&) = delete;
+    void operator=(const Parallel &) = delete;
+    Parallel(const Parallel &) = delete;
 };
 
 // busy-looping variant that is more suitable for ARM processors
 class ParallelBusy : public Parallel
 {
-public:
+  public:
     ParallelBusy(std::uint32_t num_workers) : Parallel(num_workers)
     {
     }
@@ -203,7 +199,8 @@ public:
 // C interface for the Parallel class
 static std::shared_ptr<Parallel> parallel;
 
-void parallel_init(uint32_t num, bool busy)
+void
+parallel_init(uint32_t num, bool busy)
 {
     if (busy) {
         parallel = std::make_unique<ParallelBusy>(num);
@@ -214,17 +211,20 @@ void parallel_init(uint32_t num, bool busy)
     parallel->begin();
 }
 
-void parallel_run(void task(uint32_t))
+void
+parallel_run(void task(uint32_t))
 {
     parallel->run(task);
 }
 
-uint32_t parallel_num_workers(void)
+uint32_t
+parallel_num_workers(void)
 {
     return parallel->num_workers();
 }
 
-void parallel_close(void)
+void
+parallel_close(void)
 {
     parallel.reset();
 }

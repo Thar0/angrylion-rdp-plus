@@ -55,15 +55,13 @@ bool config_stale_m64p;
 static bool warn_hle;
 static bool plugin_initialized;
 
-extern "C"
-{
+extern "C" {
 
 void (*debug_callback)(void *, int, const char *);
 void *debug_call_context;
 m64p_dynlib_handle CoreLibHandle;
 GFX_INFO gfx;
 void (*render_callback)(int);
-
 }
 
 m64p_handle configVideoGeneral = NULL;
@@ -77,13 +75,11 @@ m64p_handle configVideoAngrylionPlus = NULL;
 #define PLUGIN_VERSION           0x010600
 #define VIDEO_PLUGIN_API_VERSION 0x020500
 
-extern "C"
-{
+extern "C" {
 
 extern int32_t win_width;
 extern int32_t win_height;
 extern int32_t win_fullscreen;
-
 }
 
 EXPORT m64p_error CALL
@@ -139,7 +135,8 @@ PluginStartup(m64p_dynlib_handle _CoreLibHandle, void *Context, void (*DebugCall
                          "Hide overscan area in filteded mode if True");
     ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_INTEGER_SCALING, config_m64p.vi.integer_scaling,
                          "Display upscaled pixels as groups of 1x1, 2x2, 3x3, etc. if True");
-    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_VSYNC, config_m64p.vi.vsync, "Enable vsync to prevent tearing");
+    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_VSYNC, config_m64p.vi.vsync,
+                         "Enable vsync to prevent tearing");
     ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_DP_COMPAT, config_m64p.dp.compat,
                         "Compatibility mode (0=Fast 1=Moderate 2=Slow");
 
@@ -197,13 +194,13 @@ PluginGetVersion(m64p_plugin_type *PluginType, int *PluginVersion, int *APIVersi
 
 #ifdef RMG
 extern "C" EXPORT m64p_error CALL
-PluginConfig(void* parent)
+PluginConfig(void *parent)
 {
     if (!plugin_initialized) {
         return M64ERR_NOT_INIT;
     }
 
-    UserInterface::MainDialog dialog((QWidget*)parent);
+    UserInterface::MainDialog dialog((QWidget *)parent);
     dialog.exec();
 
     return M64ERR_SUCCESS;
@@ -240,7 +237,8 @@ ProcessRDPList(void)
     n64video_process_list();
 }
 
-static void config_load(void)
+static void
+config_load(void)
 {
     config_m64p.parallel = ConfigGetParamBool(configVideoAngrylionPlus, KEY_PARALLEL);
     config_m64p.num_workers = ConfigGetParamInt(configVideoAngrylionPlus, KEY_NUM_WORKERS);
@@ -255,7 +253,8 @@ static void config_load(void)
     config_m64p.dp.compat = (dp_compat_profile)ConfigGetParamInt(configVideoAngrylionPlus, KEY_DP_COMPAT);
 }
 
-static void mi_intr(void)
+static void
+mi_intr(void)
 {
     if (config_stale_m64p) {
         config_load();
@@ -352,7 +351,7 @@ ReadScreen2(void *dest, int *width, int *height, int front)
     UNUSED(front);
 
     struct n64video_frame_buffer fb = { 0, 0, 0, 0, 0, 0 };
-    fb.pixels = (n64video_pixel*)dest;
+    fb.pixels = (n64video_pixel *)dest;
     vdac_read(&fb, false);
 
     *width = fb.width;

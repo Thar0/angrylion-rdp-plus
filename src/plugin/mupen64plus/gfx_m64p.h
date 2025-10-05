@@ -1,8 +1,7 @@
 #pragma once
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 #include "core/n64video.h"
@@ -28,14 +27,14 @@ extern void (*render_callback)(int);
 extern void (*debug_callback)(void *, int, const char *);
 extern void *debug_call_context;
 
-extern ptr_ConfigOpenSection	  ConfigOpenSection;
-extern ptr_ConfigSaveSection      ConfigSaveSection;
-extern ptr_ConfigSetDefaultInt    ConfigSetDefaultInt;
-extern ptr_ConfigSetDefaultBool   ConfigSetDefaultBool;
-extern ptr_ConfigGetParamInt      ConfigGetParamInt;
-extern ptr_ConfigGetParamBool     ConfigGetParamBool;
-extern ptr_ConfigSetParameter     ConfigSetParameter;
-extern ptr_PluginGetVersion       CoreGetVersion;
+extern ptr_ConfigOpenSection ConfigOpenSection;
+extern ptr_ConfigSaveSection ConfigSaveSection;
+extern ptr_ConfigSetDefaultInt ConfigSetDefaultInt;
+extern ptr_ConfigSetDefaultBool ConfigSetDefaultBool;
+extern ptr_ConfigGetParamInt ConfigGetParamInt;
+extern ptr_ConfigGetParamBool ConfigGetParamBool;
+extern ptr_ConfigSetParameter ConfigSetParameter;
+extern ptr_PluginGetVersion CoreGetVersion;
 
 #define KEY_FULLSCREEN    "Fullscreen"
 #define KEY_SCREEN_WIDTH  "ScreenWidth"
