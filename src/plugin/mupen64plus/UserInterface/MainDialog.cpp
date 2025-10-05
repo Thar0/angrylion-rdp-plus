@@ -14,6 +14,9 @@
 
 using namespace UserInterface;
 
+extern struct n64video_config config_m64p;
+extern bool config_stale_m64p;
+
 MainDialog::MainDialog(QWidget* parent) : QDialog(parent)
 {
     this->setupUi(this);
@@ -110,7 +113,9 @@ void MainDialog::on_buttonBox_clicked(QAbstractButton* button)
         ConfigSetParameter(configVideoAngrylionPlus, KEY_VI_INTEGER_SCALING, M64TYPE_BOOL, &viIntegerScalingValue);
         ConfigSetParameter(configVideoAngrylionPlus, KEY_VI_VSYNC, M64TYPE_BOOL, &viVsyncValue);
 
-        ConfigSaveSection("Video-AngrylionPlus");   
+        ConfigSaveSection("Video-AngrylionPlus");
+
+        config_stale_m64p = true;
     }
     else if (pushButton == defaultButton)
     {

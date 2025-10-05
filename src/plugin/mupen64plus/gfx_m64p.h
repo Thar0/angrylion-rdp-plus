@@ -6,6 +6,7 @@ extern "C"
 #endif
 
 #include "core/n64video.h"
+#include "output/vdac.h"
 #include "api/m64p_plugin.h"
 #include "api/m64p_common.h"
 #include "api/m64p_config.h"

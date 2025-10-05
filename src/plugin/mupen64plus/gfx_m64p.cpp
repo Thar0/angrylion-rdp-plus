@@ -50,7 +50,8 @@ ptr_ConfigGetParamBool ConfigGetParamBool = NULL;
 ptr_ConfigSetParameter ConfigSetParameter = NULL;
 ptr_PluginGetVersion CoreGetVersion = NULL;
 
-static struct n64video_config config;
+struct n64video_config config_m64p;
+bool config_stale_m64p;
 static bool warn_hle;
 static bool plugin_initialized;
 
@@ -119,27 +120,27 @@ PluginStartup(m64p_dynlib_handle _CoreLibHandle, void *Context, void (*DebugCall
 
     CoreGetVersion = (ptr_PluginGetVersion)DLSYM(CoreLibHandle, "PluginGetVersion");
 
-    n64video_config_init(&config);
+    n64video_config_init(&config_m64p);
 
-    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_PARALLEL, config.parallel,
+    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_PARALLEL, config_m64p.parallel,
                          "Distribute rendering between multiple processors if True");
-    ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_NUM_WORKERS, config.num_workers,
+    ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_NUM_WORKERS, config_m64p.num_workers,
                         "Rendering Workers (0=Use all logical processors)");
-    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_BUSY_LOOP, config.busyloop,
+    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_BUSY_LOOP, config_m64p.busyloop,
                          "Use a busyloop while waiting for work");
-    ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_VI_MODE, config.vi.mode,
+    ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_VI_MODE, config_m64p.vi.mode,
                         "VI mode (0=Filtered, 1=Unfiltered, 2=Depth, 3=Coverage)");
-    ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_VI_INTERP, config.vi.interp,
+    ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_VI_INTERP, config_m64p.vi.interp,
                         "Scaling interpolation type (0=Blocky (Nearest-neighbor), 1=Blurry (Bilinear), 2=Soft "
                         "(Bilinear + Nearest-neighbor))");
-    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_WIDESCREEN, config.vi.widescreen,
+    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_WIDESCREEN, config_m64p.vi.widescreen,
                          "Use anamorphic 16:9 output mode if True");
-    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_HIDE_OVERSCAN, config.vi.hide_overscan,
+    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_HIDE_OVERSCAN, config_m64p.vi.hide_overscan,
                          "Hide overscan area in filteded mode if True");
-    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_INTEGER_SCALING, config.vi.integer_scaling,
+    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_INTEGER_SCALING, config_m64p.vi.integer_scaling,
                          "Display upscaled pixels as groups of 1x1, 2x2, 3x3, etc. if True");
-    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_VSYNC, config.vi.vsync, "Enable vsync to prevent tearing");
-    ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_DP_COMPAT, config.dp.compat,
+    ConfigSetDefaultBool(configVideoAngrylionPlus, KEY_VI_VSYNC, config_m64p.vi.vsync, "Enable vsync to prevent tearing");
+    ConfigSetDefaultInt(configVideoAngrylionPlus, KEY_DP_COMPAT, config_m64p.dp.compat,
                         "Compatibility mode (0=Fast 1=Moderate 2=Slow");
 
 #ifndef RMG
@@ -239,6 +240,35 @@ ProcessRDPList(void)
     n64video_process_list();
 }
 
+static void config_load(void)
+{
+    config_m64p.parallel = ConfigGetParamBool(configVideoAngrylionPlus, KEY_PARALLEL);
+    config_m64p.num_workers = ConfigGetParamInt(configVideoAngrylionPlus, KEY_NUM_WORKERS);
+    config_m64p.busyloop = ConfigGetParamBool(configVideoAngrylionPlus, KEY_BUSY_LOOP);
+    config_m64p.vi.mode = (vi_mode)ConfigGetParamInt(configVideoAngrylionPlus, KEY_VI_MODE);
+    config_m64p.vi.interp = (vi_interp)ConfigGetParamInt(configVideoAngrylionPlus, KEY_VI_INTERP);
+    config_m64p.vi.widescreen = ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_WIDESCREEN);
+    config_m64p.vi.hide_overscan = ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_HIDE_OVERSCAN);
+    config_m64p.vi.integer_scaling = ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_INTEGER_SCALING);
+    config_m64p.vi.vsync = ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_VSYNC);
+
+    config_m64p.dp.compat = (dp_compat_profile)ConfigGetParamInt(configVideoAngrylionPlus, KEY_DP_COMPAT);
+}
+
+static void mi_intr(void)
+{
+    if (config_stale_m64p) {
+        config_load();
+
+        vdac_close();
+        n64video_close();
+        n64video_init(&config_m64p);
+        vdac_init(&config_m64p);
+        config_stale_m64p = false;
+    }
+    gfx.CheckInterrupts();
+}
+
 EXPORT int CALL
 RomOpen(void)
 {
@@ -250,37 +280,27 @@ RomOpen(void)
     win_width = ConfigGetParamInt(CONFIG_GENERAL, KEY_SCREEN_WIDTH);
     win_height = ConfigGetParamInt(CONFIG_GENERAL, KEY_SCREEN_HEIGHT);
 
-    config.parallel = ConfigGetParamBool(configVideoAngrylionPlus, KEY_PARALLEL);
-    config.num_workers = ConfigGetParamInt(configVideoAngrylionPlus, KEY_NUM_WORKERS);
-    config.busyloop = ConfigGetParamBool(configVideoAngrylionPlus, KEY_BUSY_LOOP);
-    config.vi.mode = (vi_mode)ConfigGetParamInt(configVideoAngrylionPlus, KEY_VI_MODE);
-    config.vi.interp = (vi_interp)ConfigGetParamInt(configVideoAngrylionPlus, KEY_VI_INTERP);
-    config.vi.widescreen = ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_WIDESCREEN);
-    config.vi.hide_overscan = ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_HIDE_OVERSCAN);
-    config.vi.integer_scaling = ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_INTEGER_SCALING);
-    config.vi.vsync = ConfigGetParamBool(configVideoAngrylionPlus, KEY_VI_VSYNC);
+    config_load();
 
-    config.dp.compat = (dp_compat_profile)ConfigGetParamInt(configVideoAngrylionPlus, KEY_DP_COMPAT);
-
-    config.gfx.rdram = gfx.RDRAM;
+    config_m64p.gfx.rdram = gfx.RDRAM;
 
     int core_version;
     CoreGetVersion(NULL, &core_version, NULL, NULL, NULL);
     if (core_version >= 0x020501) {
-        config.gfx.rdram_size = *gfx.RDRAM_SIZE;
+        config_m64p.gfx.rdram_size = *gfx.RDRAM_SIZE;
     } else {
-        config.gfx.rdram_size = RDRAM_MAX_SIZE;
+        config_m64p.gfx.rdram_size = RDRAM_MAX_SIZE;
     }
 
-    config.gfx.dmem = gfx.DMEM;
-    config.gfx.mi_intr_reg = (uint32_t *)gfx.MI_INTR_REG;
-    config.gfx.mi_intr_cb = gfx.CheckInterrupts;
+    config_m64p.gfx.dmem = gfx.DMEM;
+    config_m64p.gfx.mi_intr_reg = (uint32_t *)gfx.MI_INTR_REG;
+    config_m64p.gfx.mi_intr_cb = mi_intr;
 
-    config.gfx.vi_reg = (uint32_t **)&gfx.VI_STATUS_REG;
-    config.gfx.dp_reg = (uint32_t **)&gfx.DPC_START_REG;
+    config_m64p.gfx.vi_reg = (uint32_t **)&gfx.VI_STATUS_REG;
+    config_m64p.gfx.dp_reg = (uint32_t **)&gfx.DPC_START_REG;
 
-    n64video_init(&config);
-    vdac_init(&config);
+    n64video_init(&config_m64p);
+    vdac_init(&config_m64p);
 
     return 1;
 }
