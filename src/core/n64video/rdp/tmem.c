@@ -292,7 +292,7 @@ fetch_texel_quadro(struct rdp_state *wstate, struct color *color0, struct color 
         taddrs[1] = (tbase0 << 3) + s1 + sdiff;
         taddrs[2] = (tbase2 << 3) + s0;
         taddrs[3] = (tbase2 << 3) + s1 + sdiff;
-    } else if (tsize == PIXEL_SIZE_8BIT) {
+    } else if (tformat == FORMAT_YUV || tsize == PIXEL_SIZE_8BIT) {
         taddrs[0] = (tbase0 << 3) + s0;
         taddrs[1] = (tbase0 << 3) + s1;
         taddrs[2] = (tbase2 << 3) + s0;
