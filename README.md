@@ -2,6 +2,8 @@
 
 This is a conservative fork of angrylion's RDP plugin that aims to improve performance and add new features while retaining the accuracy of the original plugin.
 
+This fork in particular vastly improves code readability and introduces a lot of in-line commentary on most aspects of the renderer, while retaining bit-exactness. The hope is that the additional exposition and cleaned up presentation will lower the bar for anyone interested in the fine details of the RDP to better understand the architecture.
+
 ### Current features
 * More maintainable code base by dividing the huge n64video.cpp into smaller pieces.
 * Improved portability by separating the emulator plugin interface and window management from the RDP emulation core.
