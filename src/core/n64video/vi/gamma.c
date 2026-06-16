@@ -65,15 +65,14 @@ static void
 vi_gamma_init(void)
 {
     int i;
-    for (i = 0; i < 256; i++) {
-        gamma_table[i] = vi_integer_sqrt(i << 6);
-        gamma_table[i] <<= 1;
-    }
 
-    for (i = 0; i < 0x4000; i++) {
-        gamma_dither_table[i] = vi_integer_sqrt(i);
-        gamma_dither_table[i] <<= 1;
-    }
+    // Integer square root for 8-bit inputs
+    for (i = 0; i < 256; i++)
+        gamma_table[i] = vi_integer_sqrt(i << 6) << 1;
+
+    // Integer square root for 14-bit (post-dither) inputs
+    for (i = 0; i < (1 << (8 + 6)); i++)
+        gamma_dither_table[i] = vi_integer_sqrt(i) << 1;
 }
 
 #endif // N64VIDEO_C

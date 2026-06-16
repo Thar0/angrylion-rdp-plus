@@ -148,16 +148,21 @@ vi_process_full_parallel(uint32_t worker_id)
     }
 
     // For each line ((V_END - V_START) >> 1) (full lines rather than half-lines)
-    for (y = y_begin; y < y_end; y += y_inc) {
+    for (y = y_begin; y < y_end; y += y_inc) { // y_inc is nominally 1
         int32_t x;
 
-        // y_start is y offset frm Y_SCALE register, plus the current line (y_add is Y_SCALE)
+        // y_start is Y_OFFSET frm Y_SCALE_REG, plus the current line (y_add is Y_SCALE from Y_SCALE_REG)
         // current line
-        uint32_t curry = y_start + y * y_add; // 2.10 + 2.10 * (dimensionless) = 2.10
+        uint32_t curry = y_start + (y + 0) * y_add; // 2.10 + 2.10 * (dimensionless) = 2.10
         // next line
         uint32_t nexty = y_start + (y + 1) * y_add;
-        // integer part of current line?
-        uint32_t prevy = curry >> 10;
+
+        // integer part of current and next line
+        uint32_t curry_int = curry >> 10;
+        uint32_t nexty_int = nexty >> 10;
+
+        // yfrac is top 5 fraction bits
+        yfrac = (curry >> 5) & 0x1f;
 
         cache_marker = cache_next_marker = cache_marker_init;
         if (ctrl.divot_enable) {
@@ -166,17 +171,14 @@ vi_process_full_parallel(uint32_t worker_id)
 
         struct n64video_pixel *pixel_row = &prescale[prescale_ptr + linecount * y];
 
-        // yfrac is top 5 fraction bits
-        yfrac = (curry >> 5) & 0x1f;
-
         // vi_width_low is fb width (VI_WIDTH reg)
         // "pixels" is the start of the current line as an index
-        pixels = vi_width_low * prevy;
+        pixels = vi_width_low * curry_int;
         // "nextpixels" is the start of the next line as an index
         nextpixels = vi_width_low + pixels;
 
-        // check if prevy and nexty are equal (same integer coordinate)
-        if (prevy == (nexty >> 10)) {
+        // check if curry_int and nexty_int are equal (same integer coordinate)
+        if (curry_int == nexty_int) {
             // fetch bug will affect the next output line
             fetchbugstate = 2;
         } else {
@@ -704,7 +706,7 @@ n64video_update_screen(struct n64video_frame_buffer *fb)
     // parse and check some common registers
     vi_reg_ptr = config.gfx.vi_reg;
 
-    v_start = (*vi_reg_ptr[VI_V_START] >> 16) & 0x3ff;
+    v_start = (*vi_reg_ptr[VI_V_START] >> 16) & 0x3ff; // 1~1024
     h_start = (*vi_reg_ptr[VI_H_START] >> 16) & 0x3ff;
 
     int32_t v_end = *vi_reg_ptr[VI_V_START] & 0x3ff;
