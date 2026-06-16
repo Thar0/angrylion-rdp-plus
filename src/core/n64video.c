@@ -18,6 +18,9 @@
 #define SIGN(x, numb)  (((x) & ((1 << (numb)) - 1)) | -((x) & (1 << ((numb)-1))))
 #define SIGNF(x, numb) ((x) | -((x) & (1 << ((numb)-1))))
 
+// Conditional negation of x if c is true
+#define CNEG(x, c) (((x) ^ -(c)) + (c))
+
 #define TRELATIVE(x, y) ((x) - ((y) << 3))
 
 #define PIXELS_TO_BYTES(pix, siz) (((pix) << (siz)) >> 1)

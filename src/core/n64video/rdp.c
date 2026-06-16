@@ -110,6 +110,7 @@ struct other_modes {
     int alpha_compare_en;
 
     struct {
+        int tlut_fmt;
         int stalederivs;
         int dolod;
         int partialreject_1cycle;
@@ -136,6 +137,7 @@ struct spansigs {
 };
 
 struct tile {
+    // Set Tile
     int format;
     int size;
     int line;
@@ -144,8 +146,10 @@ struct tile {
     int ct, mt, cs, ms;
     int mask_t, shift_t, mask_s, shift_s;
 
+    // Set Tile Size / Load
     uint16_t sl, tl, sh, th;
 
+    // Derived quantities
     struct {
         int clampdiffs, clampdifft;
         int clampens, clampent;
@@ -155,14 +159,14 @@ struct tile {
 };
 
 struct span {
-    int lx, rx;
-    int unscrx;
-    int validline;
-    int32_t r, g, b, a, s, t, w, z;
-    int32_t majorx[4];
-    int32_t minorx[4];
-    int32_t invalyscan[4];
-};
+    uint8_t  validline;             // Single bit
+    uint8_t  invalyscan;            // 4 bit field for each y subpixel
+    int16_t  unscrx;                // Signed 12 bit?
+    uint16_t lx, rx;                // Unsigned 12 bit?
+    uint16_t majorx[4];             // Unsigned 13 bit?
+    uint16_t minorx[4];             // Unsigned 13 bit?
+    int32_t r, g, b, a, s, t, w, z; // s10.11 shifted left by 10?
+}; // 0x40 or so
 
 struct combiner_inputs {
     int sub_a_rgb0;
@@ -749,6 +753,7 @@ rdp_set_other_modes(struct rdp_state *wstate, const uint32_t *args)
                       &wstate->blender2b_a[1], wstate->other_modes.blend_m2a_1, wstate->other_modes.blend_m2b_1);
 
     wstate->other_modes.f.stalederivs = 1;
+    wstate->other_modes.f.tlut_fmt = wstate->other_modes.tlut_type ? FORMAT_IA : FORMAT_RGBA;
 }
 
 void
