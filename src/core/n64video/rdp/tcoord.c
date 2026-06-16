@@ -4,7 +4,7 @@
 
 // For perspective division
 // HW contains this in a ROM
-static const int32_t norm_point_table[64] = {
+static const int32_t norm_point_table[64] = { // 15 bits
     // clang-format off
     0x4000, 0x3F04, 0x3E10, 0x3D22, 0x3C3C, 0x3B5D, 0x3A83, 0x39B1,
     0x38E4, 0x381C, 0x375A, 0x369D, 0x35E5, 0x3532, 0x3483, 0x33D9,
@@ -19,7 +19,7 @@ static const int32_t norm_point_table[64] = {
 
 // For perspective division
 // HW contains this in a ROM
-static const int32_t norm_slope_table[64] = {
+static const int32_t norm_slope_table[64] = { // 12 bits
     // clang-format off
     0xF03, 0xF0B, 0xF11, 0xF19, 0xF20, 0xF25, 0xF2D, 0xF32,
     0xF37, 0xF3D, 0xF42, 0xF47, 0xF4C, 0xF50, 0xF55, 0xF59,
@@ -269,6 +269,9 @@ tclod_2cycle(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t s, in
     int nextyt = (t + wstate->spans_dtdy) >> 16;
     int nextyw = (w + wstate->spans_dwdy) >> 16;
 
+    // I guess the way this works on real hardware is that the LOD pipeline stage is sufficiently far that
+    // two adjacent perspective correct texels have been computed by the time these results are used
+    // But then how are the d*dy attributes involved?
     wstate->tcdiv_ptr(nexts, nextt, nextw, &nexts, &nextt);
     wstate->tcdiv_ptr(nextys, nextyt, nextyw, &nextys, &nextyt);
 
@@ -296,15 +299,13 @@ tclod_2cycle(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t s, in
         l_tile = wstate->max_level;
 
     if (!wstate->other_modes.detail_tex_en) {
-        *tile1 = (prim_tile + l_tile) & 7;
-
         // This condition is sort of like a clamp at either max or min levels,
         // distant means lod clamped or the tile selected was >= max_level
         // magnify means lod < min_level or lod < 32
-        if (!(distant || (!wstate->other_modes.sharpen_tex_en && magnify)))
-            *tile2 = (*tile1 + 1) & 7;
-        else
-            *tile2 = *tile1;
+        bool lod_clamped = distant || (!wstate->other_modes.sharpen_tex_en && magnify);
+
+        *tile1 = (prim_tile + l_tile) & 7;
+        *tile2 = (prim_tile + l_tile + (!lod_clamped)) & 7;
     } else {
         // In detail mode, step the tile up once more if not min_level
         // Also step the other tile up once more if the first tile was stepped up and it isn't distant
@@ -360,10 +361,7 @@ tclod_2cycle_next(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t 
     if (distant)
         l_tile = wstate->max_level;
 
-    if (!wstate->other_modes.detail_tex_en)
-        *t1 = (prim_tile + l_tile) & 7;
-    else
-        *t1 = (prim_tile + l_tile + (!magnify)) & 7;
+    *t1 = (prim_tile + l_tile + (wstate->other_modes.detail_tex_en && !magnify)) & 7;
 
     // For dsdx
 
@@ -383,59 +381,13 @@ tclod_2cycle_next(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t 
     if (distant)
         l_tile = wstate->max_level;
 
-    if (!wstate->other_modes.detail_tex_en)
-        *t2 = (prim_tile + l_tile) & 7;
-    else
-        *t2 = (prim_tile + l_tile + (!magnify)) & 7;
+    *t2 = (prim_tile + l_tile + (wstate->other_modes.detail_tex_en && !magnify)) & 7;
 }
 
 static STRICTINLINE void
-tclod_2cycle_notexel1(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t s, int32_t t, int32_t w,
-                      int32_t dsinc, int32_t dtinc, int32_t dwinc, int32_t prim_tile, int32_t *t1)
-{
-    int inits = *sss, initt = *sst;
-    tclod_tcclamp(sss, sst);
-
-    if (!wstate->other_modes.f.dolod)
-        return;
-
-    int nexts = (s + dsinc) >> 16;
-    int nextt = (t + dtinc) >> 16;
-    int nextw = (w + dwinc) >> 16;
-    int nextys = (s + wstate->spans_dsdy) >> 16;
-    int nextyt = (t + wstate->spans_dtdy) >> 16;
-    int nextyw = (w + wstate->spans_dwdy) >> 16;
-
-    wstate->tcdiv_ptr(nexts, nextt, nextw, &nexts, &nextt);
-    wstate->tcdiv_ptr(nextys, nextyt, nextyw, &nextys, &nextyt);
-
-    bool lodclamp = TCDIV_OVERFLOWED(initt) || TCDIV_OVERFLOWED(nextt) || TCDIV_OVERFLOWED(inits) ||
-                    TCDIV_OVERFLOWED(nexts) || TCDIV_OVERFLOWED(nextys) || TCDIV_OVERFLOWED(nextyt);
-
-    int32_t lod = 0;
-    if (!lodclamp) {
-        tclod_4x17_to_15(inits, nexts, initt, nextt, 0, &lod);
-        tclod_4x17_to_15(inits, nextys, initt, nextyt, lod, &lod);
-    }
-
-    uint32_t l_tile;
-    bool distant;
-    bool magnify;
-    lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, &wstate->lod_frac);
-
-    if (!wstate->other_modes.tex_lod_en)
-        return;
-
-    if (distant)
-        l_tile = wstate->max_level;
-
-    *t1 = (prim_tile + l_tile + ((wstate->other_modes.detail_tex_en && !magnify))) & 7;
-}
-
-static STRICTINLINE void
-tclod_1cycle_current(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t nexts, int32_t nextt, int32_t s,
-                     int32_t t, int32_t w, int32_t dsinc, int32_t dtinc, int32_t dwinc, int32_t scanline,
-                     int32_t prim_tile, int32_t *t1, struct spansigs *sigs)
+tclod_1cycle(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t nexts, int32_t nextt, int32_t s,
+             int32_t t, int32_t w, int32_t dsinc, int32_t dtinc, int32_t dwinc, int32_t scanline,
+             int32_t prim_tile, int32_t *t1, struct spansigs *sigs)
 {
     tclod_tcclamp(sss, sst);
 
@@ -467,75 +419,6 @@ tclod_1cycle_current(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32
         farw = (w + (dwinc << 1)) >> 16;
     }
 
-    wstate->tcdiv_ptr(fars, fart, farw, &fars, &fart);
-
-    bool lodclamp =
-        TCDIV_OVERFLOWED(fart) || TCDIV_OVERFLOWED(nextt) || TCDIV_OVERFLOWED(fars) || TCDIV_OVERFLOWED(nexts);
-
-    int32_t lod = 0;
-    if (!lodclamp)
-        tclod_4x17_to_15(nexts, fars, nextt, fart, 0, &lod);
-
-    uint32_t l_tile;
-    bool distant;
-    bool magnify;
-    lodfrac_lodtile_signals(wstate, lodclamp, lod, &l_tile, &magnify, &distant, &wstate->lod_frac);
-
-    if (!wstate->other_modes.tex_lod_en)
-        return;
-
-    if (distant)
-        l_tile = wstate->max_level;
-
-    *t1 = (prim_tile + l_tile + (wstate->other_modes.detail_tex_en && !magnify)) & 7;
-}
-
-static STRICTINLINE void
-tclod_1cycle_current_simple(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t s, int32_t t, int32_t w,
-                            int32_t dsinc, int32_t dtinc, int32_t dwinc, int32_t scanline, int32_t prim_tile,
-                            int32_t *t1, struct spansigs *sigs)
-{
-    tclod_tcclamp(sss, sst);
-
-    if (!wstate->other_modes.f.dolod)
-        return;
-
-    int nextscan = scanline + 1;
-
-    int fars, fart, farw, nexts, nextt, nextw;
-    if (wstate->span[nextscan].validline) {
-        if (!sigs->endspan || !sigs->longspan) {
-            nexts = (s + dsinc) >> 16;
-            nextt = (t + dtinc) >> 16;
-            nextw = (w + dwinc) >> 16;
-
-            if (!(sigs->preendspan && sigs->longspan) && !(sigs->endspan && sigs->midspan)) {
-                fars = (s + (dsinc << 1)) >> 16;
-                fart = (t + (dtinc << 1)) >> 16;
-                farw = (w + (dwinc << 1)) >> 16;
-            } else {
-                fars = (s - dsinc) >> 16;
-                fart = (t - dtinc) >> 16;
-                farw = (w - dwinc) >> 16;
-            }
-        } else {
-            nexts = wstate->span[nextscan].s >> 16;
-            nextt = wstate->span[nextscan].t >> 16;
-            nextw = wstate->span[nextscan].w >> 16;
-            fars = (wstate->span[nextscan].s + dsinc) >> 16;
-            fart = (wstate->span[nextscan].t + dtinc) >> 16;
-            farw = (wstate->span[nextscan].w + dwinc) >> 16;
-        }
-    } else {
-        nexts = (s + dsinc) >> 16;
-        nextt = (t + dtinc) >> 16;
-        nextw = (w + dwinc) >> 16;
-        fars = (s + (dsinc << 1)) >> 16;
-        fart = (t + (dtinc << 1)) >> 16;
-        farw = (w + (dwinc << 1)) >> 16;
-    }
-
-    wstate->tcdiv_ptr(nexts, nextt, nextw, &nexts, &nextt);
     wstate->tcdiv_ptr(fars, fart, farw, &fars, &fart);
 
     bool lodclamp =
@@ -768,11 +651,17 @@ tcdiv_nopersp(int32_t ss, int32_t st, int32_t sw, int32_t *sss, int32_t *sst)
     *sst = (SIGN16(st)) & 0x1ffff;
 }
 
+/**
+ * Computes a fixed point division of one texture coordinate and w, checking for overflow.
+ * The division is implemented as a multiplication by reciprocal and a shift, the reciprocal is obtained
+ * with a combination of a table lookup on the most significant 6 bits of w followed by a refinement step
+ * using the 8 least significant bits of w.
+ */
 static void
-tcdiv_persp_one(int16_t C, int shift, int rcp, int temp_mask, bool W_carry, int32_t *C_out)
+tcdiv_persp_one(int16_t C /* s10.5 */, int shift, int rcp /* s10.5 ? */, int overflow_mask, bool W_carry, int32_t *C_out)
 {
     int prod = C * rcp;
-    int out_of_bounds = prod & temp_mask;
+    int out_of_bounds = prod & overflow_mask;
     int overflow = 0;
     int32_t temp;
 
@@ -782,7 +671,7 @@ tcdiv_persp_one(int16_t C, int shift, int rcp, int temp_mask, bool W_carry, int3
         temp = prod << 1;
 
     // compute overflow
-    if (out_of_bounds != temp_mask && out_of_bounds != 0)
+    if (out_of_bounds != overflow_mask && out_of_bounds != 0)
         overflow = (prod & (1 << 29)) ? (1 << 17) : (2 << 17);
 
     if (W_carry)
@@ -792,15 +681,16 @@ tcdiv_persp_one(int16_t C, int shift, int rcp, int temp_mask, bool W_carry, int3
 }
 
 static void
-tcdiv_persp(int32_t S, int32_t T, int32_t W, int32_t *S_out, int32_t *T_out)
+tcdiv_persp(int32_t S /* s10.5 */, int32_t T /* s10.5 */, int32_t W /* s10.5 */,
+            int32_t *S_out /* s10.5 */, int32_t *T_out /* s10.5 */)
 {
     int W_carry = W <= 0;
     int shift = tcdiv_table[W & 0x7FFF] & 0xF;
     int rcp = tcdiv_table[W & 0x7FFF] >> 4;
-    int temp_mask = ((1 << 30) - 1) & -((1 << 29) >> shift);
+    int overflow_mask = ((1 << 30) - 1) & -((1 << 29) >> shift);
 
-    tcdiv_persp_one(S, shift, rcp, temp_mask, W_carry, S_out);
-    tcdiv_persp_one(T, shift, rcp, temp_mask, W_carry, T_out);
+    tcdiv_persp_one(S, shift, rcp, overflow_mask, W_carry, S_out);
+    tcdiv_persp_one(T, shift, rcp, overflow_mask, W_carry, T_out);
 }
 
 static void
@@ -818,32 +708,34 @@ tcoord_init_lut(void)
         }
     }
 
-    int temppoint, tempslope;
-    int normout;
-    int wnorm;
-    int shift, tlu_rcp;
-
     for (i = 0; i < 0x8000; i++) {
+        // w = i, 10.5 format
+        // shift = min(14 - clz(w), 14)
         for (k = 1; k <= 14 && !((i << k) & 0x8000); k++)
             ;
-        shift = k - 1;
-        normout = (i << shift) & 0x3fff;
-        wnorm = (normout & 0xff) << 2;
-        normout >>= 8;
+        int shift = k - 1;
+        int normout = (i << shift) & 0x3fff; // Shift w into msbit, 0x3fff is 14 bits
+        int wnorm = (normout & 0xff) << 2; // Take 8 lsbits
+        normout >>= 8; // Take 6 msbits
 
-        temppoint = norm_point_table[normout];
-        tempslope = norm_slope_table[normout];
+        // Table lookup on the 6 msbits to get initial approximation values
+
+        int temppoint = norm_point_table[normout];
+        int tempslope = norm_slope_table[normout];
 
         tempslope = (tempslope | ~0x3ff) + 1;
 
-        tlu_rcp = (((tempslope * wnorm) >> 10) + temppoint) & 0x7fff;
+        // Refine the tabulated values
+        // The result is 15 bits but is only truly in 10.5 format when shift is 0
+        int tlu_rcp = (((tempslope * wnorm) >> 10) + temppoint) & 0x7fff;
 
         tcdiv_table[i] = shift | (tlu_rcp << 4);
     }
 
+    // Pre-generates 16 bit masks with a special case for 0
     maskbits_table[0] = 0x3ff;
     for (i = 1; i < 16; i++)
-        maskbits_table[i] = ((uint16_t)(0xffff) >> (16 - i)) & 0x3ff;
+        maskbits_table[i] = (0xffff >> (16 - i)) & 0x3ff;
 }
 
 static void

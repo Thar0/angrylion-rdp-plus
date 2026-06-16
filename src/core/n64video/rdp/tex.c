@@ -209,12 +209,12 @@ texture_pipeline_cycle(struct rdp_state *wstate, struct color *TEX, struct color
     int32_t sfracrg, sfracba;
 
     bool bilerp = cycle ? wstate->other_modes.bi_lerp1 : wstate->other_modes.bi_lerp0;
-    bool convert = wstate->other_modes.convert_one && cycle;
+    bool convert_one = wstate->other_modes.convert_one && cycle;
 
     struct color t0, t1, t2, t3;
 
-    int sss1 = SSS;
-    int sst1 = SST;
+    int sss1 = SSS; // s10.5
+    int sst1 = SST; // s10.5
 
     // Shift texture coordinates
     tcshift_cycle(&wstate->tile[tilenum], &sss1, &sst1, &maxs, &maxt);
@@ -309,14 +309,14 @@ texture_pipeline_cycle(struct rdp_state *wstate, struct color *TEX, struct color
             bool centerrg = wstate->other_modes.mid_texel && (sfracrg == 0x10 && tfrac == 0x10); // 0x10 = 0.5 (q10.5)
             bool centerba = wstate->other_modes.mid_texel && (sfracba == 0x10 && tfrac == 0x10);
 
-            if (!convert) // bilerp the newly sampled texel and its position
+            if (!convert_one) // bilerp the newly sampled texel and its position
                 bilerp_calc(TEX, &t0, &t1, &t2, &t3, sfracrg, tfrac, centerrg, upperrg, sfracba, centerba, upperba);
             else // bilerp the newly sampled texel and the previously sampled texel (2-cycle mode only)
                 bilerp_conv(TEX, prev, &t0, &t1, &t2, &t3, centerrg, centerba, upperrg, upperba);
         } else {
             // use this cycle for YUV -> RGB
 
-            if (convert) {
+            if (convert_one) {
                 // second cycle, bring in previously sampled texel
                 t0.r = t3.r = SIGN(prev->r, 9);
                 t0.g = t3.g = SIGN(prev->g, 9);
@@ -356,7 +356,7 @@ texture_pipeline_cycle(struct rdp_state *wstate, struct color *TEX, struct color
         tcmask(&wstate->tile[tilenum], &sss1, &sst1);
 
         if (bilerp) {
-            if (convert) {
+            if (convert_one) {
                 TEX->r = TEX->g = TEX->b = TEX->a = prev->b;
             } else {
                 fetch_texel(wstate, &t0, sss1, sst1, tilenum);
@@ -366,7 +366,7 @@ texture_pipeline_cycle(struct rdp_state *wstate, struct color *TEX, struct color
                 TEX->a = t0.a;
             }
         } else {
-            if (convert) {
+            if (convert_one) {
                 t0.r = SIGN(prev->r, 9);
                 t0.g = SIGN(prev->g, 9);
                 t0.b = SIGN(prev->b, 9);
