@@ -160,6 +160,11 @@ z_compare(struct rdp_state *wstate, uint32_t zcurpixel, uint32_t sz, uint16_t dz
         // coplanar OR sz + dz is behind oz
         bool farther = force_coplanar || (sum >= oz);
 
+        // Blending is enabled if:
+        // - force_blend is enabled, in which case it runs uniformly for all pixels
+        // - antialias_en is enabled, coverage did not overflow and approximately coplanar
+        //   The intuition for these conditions is that blending should only be enabled when there is an edge
+        //   currently in the framebuffer and these pixels are part of the same surface
         *blend_en = wstate->other_modes.force_blend || (!overflow && wstate->other_modes.antialias_en && farther);
 
         switch (wstate->other_modes.z_mode) {
