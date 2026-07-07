@@ -4,18 +4,30 @@ static uint8_t gamma_table[0x100];
 static uint8_t gamma_dither_table[0x4000];
 
 static uint8_t
-vi_integer_sqrt(uint32_t a)
+vi_integer_sqrt(uint32_t a /* 14-bit */)
 {
+    // Remainder, partial root, trial bit
+    // The initialization at 1<<30 is odd, 'one > op' will always be true until at least 1<<14 or 8 iterations in
     unsigned long op = a, res = 0, one = 1 << 30;
 
+    // At most 15 iterations between both loops
+    // Only at most 7 iterations are non-trivial?
+
+    // Range reduce
     while (one > op)
         one >>= 2;
 
     while (one != 0) {
+        // Trial division
         if (op >= res + one) {
+            // If the result of the subtraction would remain positive, perform it
             op -= res + one;
+            // Always contributes one bit, don't think a carry is ever possible since
+            // res is initialized to 0 and every addition should hit a different bit position
+            // every time
             res += one << 1;
         }
+        // Next pos
         res >>= 1;
         one >>= 2;
     }

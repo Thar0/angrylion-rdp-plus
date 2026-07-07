@@ -3,6 +3,9 @@
 #define TCDIV_OVERFLOWED(tc) ((tc) & (3 << 17))
 
 // For perspective division
+// This is approximately
+//      round(2^14 / (1 + i / 64))
+// with just one 1-off issue at index 6
 // HW contains this in a ROM
 static const int32_t norm_point_table[64] = { // 15 bits
     // clang-format off
@@ -18,6 +21,9 @@ static const int32_t norm_point_table[64] = { // 15 bits
 };
 
 // For perspective division
+// This is exactly
+//      (point[i+1] - point[i] - 1) & 0xFFF
+// when computed from exactly the above table with 0x2000 added to the end to supply point[64]
 // HW contains this in a ROM
 static const int32_t norm_slope_table[64] = { // 12 bits
     // clang-format off
@@ -272,6 +278,12 @@ tclod_2cycle(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t s, in
     // I guess the way this works on real hardware is that the LOD pipeline stage is sufficiently far that
     // two adjacent perspective correct texels have been computed by the time these results are used
     // But then how are the d*dy attributes involved?
+    // At least in 2-cycle mode it is possible to have two different perspective corrections per pixel,
+    // since texel0 and texel1 share coordinates. So it could be that each pixel can afford to produce
+    //      correct(s, t) and correct(s + dsdy, t + dtdy)
+    // then the next pixel will supply
+    //      correct(s + dsdx, t + dtdx) and correct(s + dsdx + dsdy, t + dtdx + dtdy)
+    // for four total perspective correct coordinates in a quad to take abs diffs from
     wstate->tcdiv_ptr(nexts, nextt, nextw, &nexts, &nextt);
     wstate->tcdiv_ptr(nextys, nextyt, nextyw, &nextys, &nextyt);
 
@@ -396,6 +408,8 @@ tclod_1cycle(struct rdp_state *wstate, int32_t *sss, int32_t *sst, int32_t nexts
 
     int nextscan = scanline + 1;
 
+    // This probably falls out of the pipeline being twice as fast as 2-cycle,
+    // instead of (cur + next) it receives (next + far) and no contribution from d[st]dy
     int fars, fart, farw;
     if (wstate->span[nextscan].validline) {
         if (sigs->endspan && sigs->longspan) {
@@ -658,31 +672,32 @@ tcdiv_nopersp(int32_t ss, int32_t st, int32_t sw, int32_t *sss, int32_t *sst)
  * using the 8 least significant bits of w.
  */
 static void
-tcdiv_persp_one(int16_t C /* s10.5 */, int shift, int rcp /* s10.5 ? */, int overflow_mask, bool W_carry, int32_t *C_out)
+tcdiv_persp_one(int16_t C /* s10.5 */, int shift, int rcp /* u15 ? */, int overflow_mask, bool W_carry, int32_t *C_out)
 {
-    int prod = C * rcp;
+    // s10.5 x u15 -> s11.5 with shift of up to 14 bits
+    int32_t prod = C * rcp;
     int out_of_bounds = prod & overflow_mask;
-    int overflow = 0;
-    int32_t temp;
 
+    // Shift the product until it is correctly formatted
+    int32_t shifted;
     if (shift != 14)
-        temp = prod >>= (13 - shift);
+        shifted = prod >>= (13 - shift);
     else // 13 - 14 = -1 so shift left by 1
-        temp = prod << 1;
+        shifted = prod << 1;
 
-    // compute overflow
+    // Compute overflow
+    int overflow = 0;
     if (out_of_bounds != overflow_mask && out_of_bounds != 0)
-        overflow = (prod & (1 << 29)) ? (1 << 17) : (2 << 17);
-
+        overflow |= (prod & (1 << 29)) ? (1 << 17) : (2 << 17);
     if (W_carry)
         overflow |= 2 << 17;
 
-    *C_out = overflow | (temp & 0x1ffff);
+    *C_out = overflow | (shifted & 0x1ffff);
 }
 
 static void
 tcdiv_persp(int32_t S /* s10.5 */, int32_t T /* s10.5 */, int32_t W /* s10.5 */,
-            int32_t *S_out /* s10.5 */, int32_t *T_out /* s10.5 */)
+            int32_t *S_out /* s11.5 */, int32_t *T_out /* s11.5 */)
 {
     int W_carry = W <= 0;
     int shift = tcdiv_table[W & 0x7FFF] & 0xF;
@@ -714,19 +729,28 @@ tcoord_init_lut(void)
         for (k = 1; k <= 14 && !((i << k) & 0x8000); k++)
             ;
         int shift = k - 1;
-        int normout = (i << shift) & 0x3fff; // Shift w into msbit, 0x3fff is 14 bits
+        // Shift w into msbit, 0x3fff is 14 bits
+        // This is a sort of normalization step so the division can be treated as occurring within [1.0,2.0) in some
+        // appropriate fixed-point units. Once the division is completed, the result is shifted back into the correct
+        // format.
+        int normout = (i << shift) & 0x3fff;
         int wnorm = (normout & 0xff) << 2; // Take 8 lsbits
         normout >>= 8; // Take 6 msbits
 
         // Table lookup on the 6 msbits to get initial approximation values
-
         int temppoint = norm_point_table[normout];
         int tempslope = norm_slope_table[normout];
 
+        // tempslope always has a top hex digit of F, this could've been | ~0xFFF ?
+        // alternatively, tempslope could've been just the lowest byte and | ~0xFF
         tempslope = (tempslope | ~0x3ff) + 1;
 
         // Refine the tabulated values
+        // This essentially follows the first two terms of a Taylor series expansion
+        //      f(x + delta) = f(x) + delta * f'(x)
+        // where f(x) is the tabulated point and f'(x) is the tabulated slope
         // The result is 15 bits but is only truly in 10.5 format when shift is 0
+        // The multiplication is s0.10 x u0.10, temppoint is a 15-bit unsigned number
         int tlu_rcp = (((tempslope * wnorm) >> 10) + temppoint) & 0x7fff;
 
         tcdiv_table[i] = shift | (tlu_rcp << 4);

@@ -693,7 +693,8 @@ render_spans_2cycle_complete(struct rdp_state *wstate, int start, int end, int t
             int sz = (z >> 10) & 0x3fffff; // z is s15.16 so sz is s15.6
 
             // Texture perspective correction (next pixel)
-            // (sss, sst) are 17-bit
+            // (sss, sst) are 17-bit, in s11.5 format, sign extended from s10.5 when perspective division is not enabled
+            // lod uses the full 17-bit value, while texture sampling receives a clamped value
             wstate->tcdiv_ptr(ss, st, sw, &sss, &sst);
 
             // Texture pipelining for next pixel

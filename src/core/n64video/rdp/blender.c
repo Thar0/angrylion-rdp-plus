@@ -263,25 +263,39 @@ blender_init_lut(void)
     // q0.11 number and a q1.3 number
 
     for (int i = 0; i < 0x8000; i++) {
-        uint8_t quotient = 0;
+        uint8_t quotient = 0;          // Initialize quotient to 0
         int dividend = i & 0x7ff;      // 0.11 fixed point
         int divisor = (i >> 11) & 0xf; // 1.3 fixed point
+        // Wherever this is used there's a constant 1, so this is -divisor
         int inv_divisor = (~divisor) & 0xf;
 
-        int temp = inv_divisor + (dividend >> 8) + 1;
+        // Maybe suggests a fully pipelined divider producing one quotient bit per cycle
         int ps[9];
+
+        // Take the top 3 dividend bits and subtract the divisor to compute an initial partial remainder
+        int temp = inv_divisor + (dividend >> 8) + 1;
         ps[0] = temp & 7;
 
         for (int k = 0; k < 8; k++) {
+            // Take a bit from the dividend, msb-first
             int nbit = (dividend >> (7 - k)) & 1;
 
+            // Non-restoring division recurrence
+            // Calculate 2 * rem + dividend +- divisor
+            // Whether to add or subtract the divisor depends on the previous
+            // quotient bit, which is itself equal to the sign of the previous
+            // partial remainder (which is only saved implicitly in the quotient
+            // rather than in the partial remainder ps)
             if (quotient & (0x100 >> k))
-                temp = inv_divisor + (ps[k] << 1) + nbit + 1;
+                temp = (ps[k] << 1) + nbit + inv_divisor + 1;
             else
-                temp = divisor + (ps[k] << 1) + nbit + 0;
+                temp = (ps[k] << 1) + nbit + divisor;
 
-            ps[k + 1] = temp & 7;
-            if (temp & 0x10)
+            // Save the next partial remainder as the lowest 3 bits
+            ps[k + 1] = temp & 0b111;
+
+            // Use the sign bit of the partial remainder to determine the quotient bit, msb-first
+            if (temp & 0b00010000)
                 quotient |= (1 << (7 - k));
         }
         bldiv_hwaccurate_table[i] = quotient;
