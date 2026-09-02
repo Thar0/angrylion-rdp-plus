@@ -31,31 +31,37 @@ z_build_com_table(void)
 {
     for (int z = 0; z < 0x40000; z++) {
         uint16_t altmem = 0;
+
+        // A larger z value is farther away on the screen. When compressing the internal u15.3 z format
+        // into the 14-bit memory format, greater precision is given to the large z values. Particularly,
+        // only above z=0x7800.0b000 do any of the fractional bits of the internal z value survive to be
+        // stored to memory. Therefore, in subsequent z comparisons, only the far away pixels are sensitive
+        // to the fractional component.
         switch ((z >> 11) & 0x7F) {
             case_no_default;
 
-            case 0x00 ... 0x3F: // 64
+            case 0x00 ... 0x3F: // 64 cases
                 altmem = ((z >> 4) & 0x1FFC) | 0x0000;
                 break;
-            case 0x40 ... 0x5F: // 32
+            case 0x40 ... 0x5F: // 32 cases
                 altmem = ((z >> 3) & 0x1FFC) | 0x2000;
                 break;
-            case 0x60 ... 0x6F: // 16
+            case 0x60 ... 0x6F: // 16 cases
                 altmem = ((z >> 2) & 0x1FFC) | 0x4000;
                 break;
-            case 0x70 ... 0x77: // 8
+            case 0x70 ... 0x77: // 8 cases
                 altmem = ((z >> 1) & 0x1FFC) | 0x6000;
                 break;
-            case 0x78 ... 0x7B: // 4
+            case 0x78 ... 0x7B: // 4 cases,  1 bit of fractional u15.3 survives
                 altmem = ((z >> 0) & 0x1FFC) | 0x8000;
                 break;
-            case 0x7C ... 0x7D: // 2
+            case 0x7C ... 0x7D: // 2 cases,  2 bits of fractional u15.3 survives
                 altmem = ((z << 1) & 0x1FFC) | 0xA000;
                 break;
-            case 0x7e: // 1
+            case 0x7e: // 1 case,  all fractional u15.3 bits survive
                 altmem = ((z << 2) & 0x1FFC) | 0xC000;
                 break;
-            case 0x7f: // 1
+            case 0x7f: // 1 case,  all fractional u15.3 bits survive
                 altmem = ((z << 2) & 0x1FFC) | 0xE000;
                 break;
         }
@@ -66,6 +72,8 @@ z_build_com_table(void)
 static STRICTINLINE void
 z_store(uint32_t zcurpixel, uint32_t z, int dzpixenc)
 {
+    // Compress the u15.3 18-bit z value into the 14-bit memory format, the 4-bit priority-encoded dz
+    // value is stored in 2 visible bits and 2 hidden bits for a total of 18 bits per pixel.
     uint16_t zval = z_com_table[z & 0x3FFFF] | (uint16_t)(dzpixenc >> 2);
     uint8_t hval = dzpixenc & 3;
 
